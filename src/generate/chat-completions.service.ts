@@ -2,7 +2,7 @@ import { BadGatewayException, BadRequestException, HttpException, Injectable, Se
 import type { Response } from 'express';
 import { AiProvider, PROVIDERS } from './providers.config';
 import { KeyPoolService } from './key-pool.service';
-import { ModelRouterService } from './model-router.service';
+import { ModelRouterService, Recommendation } from './model-router.service';
 import { RateLimiterService } from './rate-limiter.service';
 import { UsageStoreService } from './usage-store.service';
 
@@ -63,8 +63,11 @@ export class ChatCompletionsService {
         }
         const gateway = {
           provider: target.provider,
+          model: target.model,
           mode: targets.mode,
-          recommended: targets.recommendation?.provider ?? null,
+          recommended: targets.recommendation
+            ? `${targets.recommendation.provider}${targets.recommendation.model ? '/' + targets.recommendation.model : ''}`
+            : null,
           reason: targets.recommendation?.reason ?? null,
           attempts,
         };
@@ -86,7 +89,7 @@ export class ChatCompletionsService {
   private async resolveTargets(body: any): Promise<{
     ordered: ResolvedTarget[];
     mode: 'auto' | 'manual';
-    recommendation: { provider: AiProvider; reason: string } | null;
+    recommendation: Recommendation | null;
   }> {
     const raw = String(body?.model || 'auto').trim();
 
@@ -119,7 +122,10 @@ export class ChatCompletionsService {
       ? [recommendation.provider, ...candidates.filter((p) => p !== recommendation!.provider)]
       : candidates;
     return {
-      ordered: orderedProviders.map((p) => ({ provider: p, model: PROVIDERS[p].defaultModel })),
+      ordered: orderedProviders.map((p) => ({
+        provider: p,
+        model: p === recommendation?.provider && recommendation?.model ? recommendation.model : PROVIDERS[p].defaultModel,
+      })),
       mode: 'auto',
       recommendation,
     };

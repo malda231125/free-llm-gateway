@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { ApiOperation, ApiSecurity, ApiTags } from '@nestjs/swagger';
 import { GenerateDto } from './dto';
 import { GenerateService } from './generate.service';
+import { ModelCatalogService } from './model-catalog.service';
 import { ChatCompletionsService } from './chat-completions.service';
 
 @ApiTags('gateway')
@@ -11,6 +12,7 @@ export class GenerateController {
   constructor(
     private readonly service: GenerateService,
     private readonly chatCompletions: ChatCompletionsService,
+    private readonly modelCatalog: ModelCatalogService,
   ) {}
 
   @Get('health')
@@ -24,6 +26,13 @@ export class GenerateController {
   @ApiOperation({ summary: '프로바이더별 설정/한도/사용량 조회' })
   providers() {
     return this.service.providers();
+  }
+
+  @Get('v1/models')
+  @ApiSecurity('apiKey')
+  @ApiOperation({ summary: '프로바이더별 사용 가능 모델 카탈로그 (10분 캐시)' })
+  models() {
+    return this.modelCatalog.catalog();
   }
 
   @Get('v1/usage')

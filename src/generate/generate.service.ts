@@ -52,12 +52,13 @@ export class GenerateService {
     for (const provider of ordered) {
       try {
         this.assertWithinLimit(provider);
-        const result = await this.callProvider(provider, undefined, dto.prompt);
+        const modelOverride = provider === recommendation?.provider ? recommendation?.model || undefined : undefined;
+        const result = await this.callProvider(provider, modelOverride, dto.prompt);
         return {
           ...result,
           routing: {
             mode: 'auto',
-            recommended: recommendation?.provider ?? null,
+            recommended: recommendation ? `${recommendation.provider}${recommendation.model ? '/' + recommendation.model : ''}` : null,
             reason: recommendation?.reason ?? '정적 우선순위 사용 (AI 라우터 생략/실패)',
             routerModel: recommendation ? ModelRouterService.ROUTER_MODEL : null,
             fallbackUsed: provider !== (recommendation?.provider ?? ordered[0]) || attempts.length > 0,

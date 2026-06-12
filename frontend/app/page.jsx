@@ -31,6 +31,8 @@ export default function Page() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [model, setModel] = useState('auto');
+  const [catalog, setCatalog] = useState({});
+  const [subModel, setSubModel] = useState('default');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -41,7 +43,16 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (authed) refreshSessions();
+    if (authed) {
+      refreshSessions();
+      fetch('/api/models').then((r) => r.json()).then((list) => {
+        if (Array.isArray(list)) {
+          const map = {};
+          for (const c of list) map[c.provider] = c.models || [];
+          setCatalog(map);
+        }
+      }).catch(() => {});
+    }
   }, [authed]);
 
   useEffect(() => {
@@ -119,7 +130,11 @@ export default function Page() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: apiMessages, model, sessionId: sid }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          model: model === 'auto' ? 'auto' : subModel === 'default' ? model : `${model}/${subModel}`,
+          sessionId: sid,
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -149,10 +164,10 @@ export default function Page() {
               } catch {}
             }
           }
-          setMessages([...history, { role: 'assistant', content: assistantText, meta: meta ? { provider: meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null }]);
+          setMessages([...history, { role: 'assistant', content: assistantText, meta: meta ? { provider: meta.model ? `${meta.provider} (${meta.model})` : meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null }]);
         }
       }
-      const finalMeta = meta ? { provider: meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null;
+      const finalMeta = meta ? { provider: meta.model ? `${meta.provider} (${meta.model})` : meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null;
       setMessages([...history, { role: 'assistant', content: assistantText || '(빈 응답)', meta: finalMeta }]);
       refreshSessions();
     } catch (err) {
@@ -238,10 +253,19 @@ export default function Page() {
               <span style={{ color: '#8b93a7', fontSize: 13, marginLeft: 8 }}>free-llm-gateway 채팅</span>
             </div>
           </div>
-          <select value={model} onChange={(e) => setModel(e.target.value)}
-            style={{ background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, maxWidth: 180 }}>
-            {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <select value={model} onChange={(e) => { setModel(e.target.value); setSubModel('default'); }}
+              style={{ background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, maxWidth: 170 }}>
+              {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+            {model !== 'auto' && (catalog[model] || []).length > 0 && (
+              <select value={subModel} onChange={(e) => setSubModel(e.target.value)}
+                style={{ background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, maxWidth: 200 }}>
+                <option value="default">기본 모델</option>
+                {(catalog[model] || []).map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
+          </div>
         </header>
 
         <section style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}>

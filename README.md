@@ -193,6 +193,10 @@ GROQ_API_KEY="gsk_key1,gsk_key2,gsk_key3"
 - `GATEWAY_API_KEY` — requires an `x-api-key` header on all `/v1/*` calls (timing-safe comparison). `/health` stays public. Use the Authorize button in Swagger to set the key.
 - When unset (e.g. local development), everything stays open.
 
+## Frontend (chat UI)
+
+A minimal Next.js chat UI lives in [`frontend/`](frontend/) — login gate, multi-session chat history (PostgreSQL + Prisma), streaming, model picker, and per-answer routing badges. Deployed separately (e.g. Vercel) with the gateway URL/API key as server-side env vars.
+
 ## How It Works
 
 All seven services expose OpenAI-compatible `chat/completions` endpoints, so a single adapter covers them all. Only the base URL, key, and default model differ per provider.

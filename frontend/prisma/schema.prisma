@@ -1,0 +1,33 @@
+// 대표님 코로케이션 Postgres의 dev DB, 스키마는 free-llm만 사용 (DATABASE_URL의 ?schema= 파라미터로 지정)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  title     String        @default("새 채팅")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  provider  String?
+  reason    String?
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}

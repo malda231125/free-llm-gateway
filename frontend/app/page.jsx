@@ -21,8 +21,9 @@ const inputStyle = {
   background: '#1a1e29', color: '#e6e6e6', fontSize: 15, outline: 'none',
 };
 const buttonStyle = {
-  padding: '12px 20px', borderRadius: 10, border: 'none', background: '#4f7cff',
+  padding: '12px 18px', borderRadius: 10, border: 'none', background: '#4f7cff',
   color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+  whiteSpace: 'nowrap', flexShrink: 0,
 };
 const selectStyle = {
   background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140',
@@ -93,7 +94,7 @@ function ModelPicker({ options, value, onChange, width = 220, placeholder = '모
         {current ? current.label : value} ▾
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: '105%', right: 0, zIndex: 50, width: Math.max(width, 300), background: '#12141c', border: '1px solid #2c3140', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'fixed', left: 12, right: 12, top: 110, zIndex: 50, maxWidth: 420, margin: '0 auto', background: '#12141c', border: '1px solid #2c3140', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
           <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder}
             style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: 'transparent', border: 'none', borderBottom: '1px solid #232838', color: '#e6e6e6', fontSize: 13, outline: 'none' }} />
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
@@ -435,6 +436,10 @@ export default function Page() {
         .md blockquote { border-left: 3px solid #3a4154; margin: 6px 0; padding-left: 10px; color: #aab2c5; }
         .compare-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
         @media (min-width: 760px) { .compare-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 899px) {
+          .header-controls { flex: 1 1 100%; }
+          .send-btn { padding: 12px 14px !important; font-size: 14px !important; }
+        }
       `}</style>
 
       <div className="desktop-sidebar">{sidebar}</div>
@@ -457,27 +462,29 @@ export default function Page() {
             </button>
           </div>
           {compareOn ? (
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <ModelPicker options={compareOptions} value={compareA} onChange={setCompareA} width={170} />
-              <span style={{ color: '#5b6275', fontSize: 13 }}>vs</span>
-              <ModelPicker options={compareOptions} value={compareB} onChange={setCompareB} width={170} />
+            <div className="header-controls" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div style={{ flex: 1, minWidth: 0 }}><ModelPicker options={compareOptions} value={compareA} onChange={setCompareA} width="100%" /></div>
+              <span style={{ color: '#5b6275', fontSize: 13, flexShrink: 0 }}>vs</span>
+              <div style={{ flex: 1, minWidth: 0 }}><ModelPicker options={compareOptions} value={compareB} onChange={setCompareB} width="100%" /></div>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div className="header-controls" style={{ display: 'flex', gap: 6 }}>
               <select value={model} onChange={(e) => { setModel(e.target.value); setSubModel('default'); }}
-                style={{ ...selectStyle, maxWidth: 170 }}>
+                style={{ ...selectStyle, flex: 1, minWidth: 0, maxWidth: 190 }}>
                 {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
               {model !== 'auto' && (catalog[model] || []).length > 0 && (
-                <ModelPicker
-                  width={210}
-                  value={subModel}
-                  onChange={setSubModel}
-                  options={[
-                    { value: 'default', label: '기본 모델', desc: '프로바이더 추천 기본값' },
-                    ...(catalog[model] || []).map((m) => ({ value: m.id, label: m.id, desc: m.description })),
-                  ]}
-                />
+                <div style={{ flex: 1.2, minWidth: 0 }}>
+                  <ModelPicker
+                    width="100%"
+                    value={subModel}
+                    onChange={setSubModel}
+                    options={[
+                      { value: 'default', label: '기본 모델', desc: '프로바이더 추천 기본값' },
+                      ...(catalog[model] || []).map((m) => ({ value: m.id, label: m.id, desc: m.description })),
+                    ]}
+                  />
+                </div>
               )}
             </div>
           )}
@@ -571,7 +578,7 @@ export default function Page() {
               value={input} onChange={(e) => setInput(e.target.value)}
               placeholder={compareOn ? '두 모델에 동시에 보낼 질문…' : '메시지를 입력하세요…'} style={inputStyle} disabled={busy} autoFocus
             />
-            <button type="submit" style={{ ...buttonStyle, opacity: busy ? 0.5 : 1 }} disabled={busy}>
+            <button type="submit" className="send-btn" style={{ ...buttonStyle, opacity: busy ? 0.5 : 1 }} disabled={busy}>
               {busy ? '…' : '전송'}
             </button>
           </div>

@@ -1,6 +1,6 @@
 # Free LLM Gateway
 
-**The AI-routed gateway for free LLM APIs — it reads your prompt and picks the right free model.**
+**The AI-routed gateway for free LLM APIs — it reads your prompt and picks the right one out of 200+ free models.**
 
 [![CI](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 Most free-tier aggregators rotate keys by *quota*. This gateway routes by **what your prompt actually needs**: a fast AI router (Gemini Flash-Lite) reads each request and dispatches it to the best free model — Groq for speed-critical short tasks, Gemini for translation and complex reasoning, NVIDIA for code. One OpenAI-compatible endpoint, seven free providers, per-key quota tracking (requests *and* tokens), automatic 429 cooldowns and fallback.
 
-- 🧠 **Prompt-aware AI routing** — not round-robin; an LLM picks the right model per request
+- 🧠 **Prompt-aware AI routing** — not round-robin; an LLM picks the right model per request, at the *model* level (e.g. reasoning → DeepSeek-R1, speed → Groq) across a live catalog of 200+ free models
 - 🔌 **OpenAI-compatible** — point any OpenAI SDK at it, streaming included
 - 🔑 **Key pooling** — stack multiple keys per provider, limits scale automatically
 - 📊 **Persistent quota tracking** — SQLite audit log; request- and token-based limits survive restarts
@@ -147,6 +147,10 @@ print(resp.choices[0].message.content)
 | `provider` | No | `GOOGLE` `GROQ` `CEREBRAS` `MISTRAL` `NVIDIA` `OPENROUTER` `GITHUB` (AI auto-routing when omitted) |
 | `model` | No | Model ID to use instead of the provider default |
 
+### `GET /v1/models`
+
+Live catalog of every free model across all configured providers (~200+, cached 10 min). Use any entry as `"PROVIDER/model-id"` in `model`.
+
 ### `GET /v1/providers`
 
 Returns per-provider key counts, gateway limits, and current usage.
@@ -162,7 +166,7 @@ Health check (always public).
 ## AI Smart Routing (when no provider is specified)
 
 1. **Candidate selection** — only providers with a configured API key and remaining gateway quota become candidates.
-2. **AI recommendation** — a fast model (`gemini-2.5-flash-lite`) receives the candidate list (with per-model strength descriptions) and your prompt, and returns the best-fit provider as JSON. This call also counts against the Google quota.
+2. **AI recommendation** — a fast model (`gemini-2.5-flash-lite`) receives highlighted models from the live catalog (DeepSeek, Qwen3-coder, Llama 4, GPT-4.1, …) plus your prompt, and returns the best-fit `PROVIDER/model` as JSON. Invalid picks fall back to the provider default. If Google is rate-limited, Groq takes over as the backup router.
 3. **Call + fallback** — the recommended provider is called; on failure (upstream congestion, etc.) the remaining candidates are tried in static priority order.
 4. **Safety net** — if the router call fails or Google quota is exhausted, AI recommendation is skipped and the static priority order applies (GOOGLE → GROQ → CEREBRAS → NVIDIA → GITHUB → OPENROUTER → MISTRAL).
 5. The `routing` block in the response transparently reports the recommended model, reason, and fallback history.

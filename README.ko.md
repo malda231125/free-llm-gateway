@@ -1,6 +1,6 @@
 # Free LLM Gateway
 
-**프롬프트를 읽고 알맞은 무료 모델로 보내주는 AI 라우팅 게이트웨이.**
+**프롬프트를 읽고 200개+ 무료 모델 중 알맞은 것으로 보내주는 AI 라우팅 게이트웨이.**
 
 [![CI](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -9,7 +9,7 @@
 
 대부분의 무료 티어 통합 도구는 "어느 키가 한도가 남았나"로 돌립니다. 이 게이트웨이는 **프롬프트가 실제로 필요로 하는 것**으로 라우팅합니다: 빠른 AI 라우터(Gemini Flash-Lite)가 요청을 읽고 가장 적합한 무료 모델로 보냅니다 — 속도가 생명인 짧은 작업은 Groq, 번역·복잡한 추론은 Gemini, 코드는 NVIDIA. OpenAI 호환 엔드포인트 하나, 무료 프로바이더 7개, 키별 사용량 추적(요청 수 + 토큰 수), 자동 429 쿨다운과 폴백까지.
 
-- 🧠 **프롬프트 인식 AI 라우팅** — 라운드로빈이 아니라 LLM이 요청마다 적합 모델을 선택
+- 🧠 **프롬프트 인식 AI 라우팅** — 라운드로빈이 아니라 LLM이 요청마다 적합 모델을 '모델 단위'로 선택 (추론→DeepSeek-R1, 속도→Groq 등, 200개+ 무료 모델 카탈로그 대상)
 - 🔌 **OpenAI 호환** — OpenAI SDK를 그대로 연결, 스트리밍 지원
 - 🔑 **키 풀링** — 프로바이더당 키 여러 개, 한도가 자동으로 늘어남
 - 📊 **영속 사용량 추적** — SQLite 감사 로그, 요청·토큰 기준 한도가 재시작 후에도 유지
@@ -147,6 +147,10 @@ print(resp.choices[0].message.content)
 | `provider` | X | `GOOGLE` `GROQ` `CEREBRAS` `MISTRAL` `NVIDIA` `OPENROUTER` `GITHUB` (미지정 시 AI 자동 라우팅) |
 | `model` | X | 프로바이더 기본 모델 대신 사용할 모델 ID |
 
+### `GET /v1/models`
+
+설정된 모든 프로바이더의 무료 모델 카탈로그(약 200개+, 10분 캐시). 목록의 항목을 `"PROVIDER/모델ID"`로 그대로 지정할 수 있습니다.
+
 ### `GET /v1/providers`
 
 프로바이더별 키 수, 게이트웨이 한도, 현재 사용량을 반환합니다.
@@ -162,7 +166,7 @@ print(resp.choices[0].message.content)
 ## AI 스마트 라우팅 (provider 미지정 시)
 
 1. **후보 선정** — API 키가 설정돼 있고 게이트웨이 한도가 남은 프로바이더만 후보로 추립니다.
-2. **AI 추천** — 빠른 모델(`gemini-2.5-flash-lite`)에게 후보 목록(모델별 강점 설명 포함)과 사용자 프롬프트를 주고 가장 적합한 프로바이더를 JSON으로 추천받습니다. 이 호출도 구글 한도로 카운트됩니다.
+2. **AI 추천** — 빠른 모델(`gemini-2.5-flash-lite`)에게 실시간 카탈로그의 주목 모델(DeepSeek, Qwen3-coder, Llama 4, GPT-4.1 등)과 사용자 프롬프트를 주고 적합한 `PROVIDER/모델`을 JSON으로 추천받습니다. 무효 추천은 기본 모델로 보정되고, 구글이 한도에 걸리면 GROQ가 예비 라우터로 이어받습니다.
 3. **호출 + 폴백** — 추천 프로바이더를 호출하고, 실패(업스트림 혼잡 등)하면 나머지 후보를 정적 우선순위로 순차 시도합니다.
 4. **안전장치** — 라우터 호출이 실패하거나 구글 한도가 없으면 AI 추천을 건너뛰고 정적 우선순위(GOOGLE → GROQ → CEREBRAS → NVIDIA → GITHUB → OPENROUTER → MISTRAL)로 동작합니다.
 5. 응답의 `routing` 블록에 추천 모델·이유·폴백 이력이 투명하게 담깁니다.

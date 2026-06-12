@@ -1,8 +1,8 @@
-# Free AI Gateway
+# Free LLM Gateway
 
 **프롬프트를 읽고 알맞은 무료 모델로 보내주는 AI 라우팅 게이트웨이.**
 
-[![CI](https://github.com/malda231125/free-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-ai-gateway/actions/workflows/ci.yml)
+[![CI](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **언어**: [English](README.md) | 한국어

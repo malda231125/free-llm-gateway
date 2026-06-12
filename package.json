@@ -1,5 +1,5 @@
 {
-  "name": "free-ai-gateway",
+  "name": "free-llm-gateway",
   "version": "0.1.0",
   "description": "무료 AI API들을 하나의 엔드포인트로 묶어주는 NestJS 게이트웨이",
   "license": "MIT",

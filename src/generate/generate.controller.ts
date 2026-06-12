@@ -16,7 +16,7 @@ export class GenerateController {
   @Get('health')
   @ApiOperation({ summary: '헬스체크' })
   health() {
-    return { ok: true, app: 'free-ai-gateway' };
+    return { ok: true, app: 'free-llm-gateway' };
   }
 
   @Get('v1/providers')

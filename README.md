@@ -1,8 +1,8 @@
-# Free AI Gateway
+# Free LLM Gateway
 
 **The AI-routed gateway for free LLM APIs — it reads your prompt and picks the right free model.**
 
-[![CI](https://github.com/malda231125/free-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-ai-gateway/actions/workflows/ci.yml)
+[![CI](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/malda231125/free-llm-gateway/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **Language**: English | [한국어](README.ko.md)

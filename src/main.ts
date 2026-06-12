@@ -24,7 +24,7 @@ async function bootstrap() {
   }
 
   const config = new DocumentBuilder()
-    .setTitle('Free AI Gateway')
+    .setTitle('Free LLM Gateway')
     .setDescription('무료 AI API들을 하나의 엔드포인트로 묶어주는 게이트웨이. /v1/*는 x-api-key 헤더 인증 필요.')
     .setVersion('0.1.0')
     .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'apiKey')

@@ -6,7 +6,7 @@ export interface CallRecord {
   provider: string;
   keyIndex: number;
   model: string;
-  endpoint: 'generate' | 'chat' | 'router';
+  endpoint: 'generate' | 'chat' | 'router' | 'embeddings';
   status: 'ok' | 'error';
   httpStatus?: number | null;
   latencyMs?: number | null;

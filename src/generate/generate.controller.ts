@@ -5,6 +5,7 @@ import { GenerateDto } from './dto';
 import { GenerateService } from './generate.service';
 import { ModelCatalogService } from './model-catalog.service';
 import { ChatCompletionsService } from './chat-completions.service';
+import { EmbeddingsService } from './embeddings.service';
 
 @ApiTags('gateway')
 @Controller()
@@ -13,6 +14,7 @@ export class GenerateController {
     private readonly service: GenerateService,
     private readonly chatCompletions: ChatCompletionsService,
     private readonly modelCatalog: ModelCatalogService,
+    private readonly embeddings: EmbeddingsService,
   ) {}
 
   @Get('health')
@@ -47,6 +49,13 @@ export class GenerateController {
   @ApiOperation({ summary: 'OpenAI 호환 chat completions (model: "auto" | "GROQ" | "GROQ/모델ID", stream 지원)' })
   chatCompletionsEndpoint(@Body() body: any, @Res() res: Response) {
     return this.chatCompletions.handle(body, res);
+  }
+
+  @Post('v1/embeddings')
+  @ApiSecurity('apiKey')
+  @ApiOperation({ summary: 'OpenAI 호환 embeddings (GOOGLE/MISTRAL/NVIDIA/GITHUB 무료 임베딩)' })
+  embeddingsEndpoint(@Body() body: any) {
+    return this.embeddings.handle(body);
   }
 
   @Post('v1/generate')

@@ -147,6 +147,10 @@ print(resp.choices[0].message.content)
 | `provider` | No | `GOOGLE` `GROQ` `CEREBRAS` `MISTRAL` `NVIDIA` `OPENROUTER` `GITHUB` (AI auto-routing when omitted) |
 | `model` | No | Model ID to use instead of the provider default |
 
+### `POST /v1/embeddings`
+
+OpenAI-compatible embeddings across free providers (GOOGLE `gemini-embedding-001`, MISTRAL `mistral-embed`, NVIDIA, GITHUB). Same `model` semantics: `"auto"`, `"MISTRAL"`, or `"PROVIDER/model-id"`. Counted in quota tracking.
+
 ### `GET /v1/models`
 
 Live catalog of every free model across all configured providers (~200+, cached 10 min). Use any entry as `"PROVIDER/model-id"` in `model`.
@@ -199,7 +203,7 @@ GROQ_API_KEY="gsk_key1,gsk_key2,gsk_key3"
 
 ## Frontend (chat UI)
 
-A minimal Next.js chat UI lives in [`frontend/`](frontend/) — login gate, multi-session chat history (PostgreSQL + Prisma), streaming, model picker, and per-answer routing badges. Deployed separately (e.g. Vercel) with the gateway URL/API key as server-side env vars.
+A minimal Next.js chat UI lives in [`frontend/`](frontend/) — login gate, multi-session chat history (PostgreSQL + Prisma), streaming, markdown/code highlighting, image input (vision), two-stage model picker, side-by-side model comparison (⚖️), and per-answer routing badges. Deployed separately (e.g. Vercel) with the gateway URL/API key as server-side env vars.
 
 ## How It Works
 

@@ -23,6 +23,8 @@ export interface ProviderConfig {
   description: string;
   /** 요청에 추가로 필요한 헤더 */
   extraHeaders?: Record<string, string>;
+  /** 무료 임베딩 지원 시 기본 임베딩 모델 */
+  embeddingModel?: string;
 }
 
 export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
@@ -32,6 +34,7 @@ export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
     defaultModel: 'gemini-2.5-flash',
     limits: { rpm: 10, rpd: 1500 },
     signupUrl: 'https://aistudio.google.com/apikey',
+    embeddingModel: 'gemini-embedding-001',
     description: '구글 Gemini Flash. 종합 품질 최상, 멀티모달/긴 컨텍스트(100만 토큰), 한국어 우수. 복잡한 추론·번역·요약·일반 질문에 최적.',
   },
   [AiProvider.GROQ]: {
@@ -56,6 +59,7 @@ export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
     defaultModel: 'mistral-small-latest',
     limits: { rpm: 2, rpd: 1000, tpd: 30_000_000 },
     signupUrl: 'https://console.mistral.ai/api-keys',
+    embeddingModel: 'mistral-embed',
     description: 'Mistral Small. 분당 2회 제한으로 느리지만 월 한도가 매우 큼. 급하지 않은 배치성 작업에 적합. 유럽어 강점.',
   },
   [AiProvider.NVIDIA]: {
@@ -64,6 +68,7 @@ export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
     defaultModel: 'meta/llama-3.3-70b-instruct',
     limits: { rpm: 40, rpd: 5000 },
     signupUrl: 'https://build.nvidia.com',
+    embeddingModel: 'nvidia/nv-embedqa-e5-v5',
     description: 'Llama 3.3 70B 등 대형 오픈모델. 무료 크레딧 소모형. 코드·기술 질문에 무난.',
   },
   [AiProvider.OPENROUTER]: {
@@ -80,6 +85,7 @@ export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
     defaultModel: 'openai/gpt-4o-mini',
     limits: { rpm: 15, rpd: 150 },
     signupUrl: 'https://github.com/settings/tokens',
+    embeddingModel: 'openai/text-embedding-3-small',
     description: 'GPT-4o-mini. OpenAI 계열 품질, 영어/코드 강점. 일일 한도 낮아 아껴 쓰는 게 좋음.',
   },
 };

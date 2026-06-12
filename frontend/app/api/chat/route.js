@@ -36,12 +36,16 @@ export async function POST(request) {
       include: { _count: { select: { messages: true } } },
     });
   }
+  const userText = typeof lastUser?.content === 'string'
+    ? lastUser.content
+    : (lastUser?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join(' ') +
+      ((lastUser?.content || []).some((c) => c.type === 'image_url') ? ' [이미지 첨부]' : '');
   if (session && lastUser) {
-    await prisma.chatMessage.create({ data: { sessionId: session.id, role: 'user', content: lastUser.content } });
+    await prisma.chatMessage.create({ data: { sessionId: session.id, role: 'user', content: userText } });
     if (session._count.messages === 0) {
       await prisma.chatSession.update({
         where: { id: session.id },
-        data: { title: lastUser.content.slice(0, 40) || '새 채팅' },
+        data: { title: userText.slice(0, 40) || '새 채팅' },
       });
     } else {
       await prisma.chatSession.update({ where: { id: session.id }, data: { updatedAt: new Date() } });

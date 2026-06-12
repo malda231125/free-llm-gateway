@@ -147,6 +147,10 @@ print(resp.choices[0].message.content)
 | `provider` | X | `GOOGLE` `GROQ` `CEREBRAS` `MISTRAL` `NVIDIA` `OPENROUTER` `GITHUB` (미지정 시 AI 자동 라우팅) |
 | `model` | X | 프로바이더 기본 모델 대신 사용할 모델 ID |
 
+### `POST /v1/embeddings`
+
+무료 임베딩 프로바이더(GOOGLE `gemini-embedding-001`, MISTRAL `mistral-embed`, NVIDIA, GITHUB)를 묶은 OpenAI 호환 임베딩. model 규칙 동일("auto" / "MISTRAL" / "PROVIDER/모델ID"), 사용량 카운트 포함.
+
 ### `GET /v1/models`
 
 설정된 모든 프로바이더의 무료 모델 카탈로그(약 200개+, 10분 캐시). 목록의 항목을 `"PROVIDER/모델ID"`로 그대로 지정할 수 있습니다.
@@ -193,7 +197,7 @@ GROQ_API_KEY="gsk_키1,gsk_키2,gsk_키3"
 
 ## 프론트엔드 (채팅 UI)
 
-미니멀 Next.js 채팅 UI가 [`frontend/`](frontend/)에 있습니다 — 로그인 게이트, 멀티 세션 채팅 히스토리(PostgreSQL + Prisma), 스트리밍, 모델 선택, 답변별 라우팅 배지. 게이트웨이 URL/API 키를 서버사이드 환경변수로 받아 별도 배포(예: Vercel)합니다.
+미니멀 Next.js 채팅 UI가 [`frontend/`](frontend/)에 있습니다 — 로그인 게이트, 멀티 세션 채팅 히스토리(PostgreSQL + Prisma), 스트리밍, 마크다운/코드 하이라이트, 이미지 입력(비전), 모델 2단계 선택, 모델 비교 모드(⚖️), 답변별 라우팅 배지. 게이트웨이 URL/API 키를 서버사이드 환경변수로 받아 별도 배포(예: Vercel)합니다.
 
 ## 동작 원리
 

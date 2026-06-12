@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 
 const MODELS = [
   { value: 'auto', label: '🧠 자동 (AI 라우팅)' },
   { value: 'GOOGLE', label: 'Google Gemini' },
-  { value: 'GROQ', label: 'Groq (Llama 70B, 초고속)' },
-  { value: 'CEREBRAS', label: 'Cerebras (GPT-OSS 120B)' },
-  { value: 'MISTRAL', label: 'Mistral Small' },
-  { value: 'NVIDIA', label: 'NVIDIA (Llama 70B)' },
-  { value: 'OPENROUTER', label: 'OpenRouter (Gemma 4)' },
-  { value: 'GITHUB', label: 'GitHub Models (GPT-4o-mini)' },
+  { value: 'GROQ', label: 'Groq' },
+  { value: 'CEREBRAS', label: 'Cerebras' },
+  { value: 'MISTRAL', label: 'Mistral' },
+  { value: 'NVIDIA', label: 'NVIDIA' },
+  { value: 'OPENROUTER', label: 'OpenRouter' },
+  { value: 'GITHUB', label: 'GitHub Models' },
 ];
 
 const inputStyle = {
@@ -21,6 +24,112 @@ const buttonStyle = {
   padding: '12px 20px', borderRadius: 10, border: 'none', background: '#4f7cff',
   color: '#fff', fontSize: 15, fontWeight: 600, cursor: 'pointer',
 };
+const selectStyle = {
+  background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140',
+  borderRadius: 8, padding: '8px 10px', fontSize: 13,
+};
+
+function CodeBlock({ className, children, ...props }) {
+  const [copied, setCopied] = useState(false);
+  const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
+  if (!isBlock) {
+    return <code style={{ background: '#2a2f3e', padding: '2px 5px', borderRadius: 4, fontSize: 13 }} {...props}>{children}</code>;
+  }
+  const text = String(children).replace(/\n$/, '');
+  return (
+    <div style={{ position: 'relative', margin: '8px 0' }}>
+      <button
+        onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        style={{ position: 'absolute', top: 6, right: 6, fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #3a4154', background: '#1a1e29', color: copied ? '#7bd88f' : '#8b93a7', cursor: 'pointer', zIndex: 1 }}>
+        {copied ? '복사됨!' : '복사'}
+      </button>
+      <pre style={{ background: '#0d1117', borderRadius: 10, padding: '14px 12px', overflowX: 'auto', fontSize: 13, lineHeight: 1.5 }}>
+        <code className={className} {...props}>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
+function Markdown({ children }) {
+  return (
+    <div className="md">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          code: CodeBlock,
+          pre: ({ children }) => <>{children}</>,
+          table: (props) => <div style={{ overflowX: 'auto' }}><table {...props} /></div>,
+          a: (props) => <a {...props} target="_blank" rel="noreferrer" style={{ color: '#7aa2ff' }} />,
+        }}>
+        {children}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+/** SSE 스트림을 읽으며 onUpdate(text, meta)를 호출 */
+async function streamChat(payload, onUpdate) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let meta = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+    for (const event of events) {
+      for (const line of event.split('\n')) {
+        if (line.startsWith(': gateway ')) {
+          try { meta = JSON.parse(line.slice(10)); } catch {}
+        } else if (line.startsWith('data: ')) {
+          const payloadLine = line.slice(6).trim();
+          if (payloadLine === '[DONE]') continue;
+          try { text += JSON.parse(payloadLine).choices?.[0]?.delta?.content || ''; } catch {}
+        }
+      }
+      onUpdate(text, meta);
+    }
+  }
+  return { text, meta };
+}
+
+function metaLabel(meta) {
+  if (!meta?.provider) return null;
+  const name = meta.model ? `${meta.provider} (${meta.model})` : meta.provider;
+  const reason = meta.mode === 'auto' ? meta.reason : null;
+  return { provider: name, reason };
+}
+
+/** 이미지를 최대 1280px JPEG로 리사이즈해 dataURL 반환 */
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1280;
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 export default function Page() {
   const [authed, setAuthed] = useState(null);
@@ -36,7 +145,13 @@ export default function Page() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [image, setImage] = useState(null); // dataURL
+  const [compareOn, setCompareOn] = useState(false);
+  const [compareA, setCompareA] = useState('auto');
+  const [compareB, setCompareB] = useState('GROQ');
+  const [compareRuns, setCompareRuns] = useState([]);
   const bottomRef = useRef(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     fetch('/api/me').then((r) => r.json()).then((d) => setAuthed(d.authed)).catch(() => setAuthed(false));
@@ -57,7 +172,7 @@ export default function Page() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, busy]);
+  }, [messages, compareRuns, busy]);
 
   async function refreshSessions() {
     const d = await fetch('/api/sessions').then((r) => r.json()).catch(() => ({ sessions: [] }));
@@ -82,6 +197,7 @@ export default function Page() {
       setSessionId(d.session.id);
       setMessages([]);
       setSidebarOpen(false);
+      setCompareOn(false);
       refreshSessions();
     }
   }
@@ -89,6 +205,7 @@ export default function Page() {
   async function openChat(id) {
     setSessionId(id);
     setSidebarOpen(false);
+    setCompareOn(false);
     const d = await fetch(`/api/sessions/${id}`).then((r) => r.json()).catch(() => ({ messages: [] }));
     setMessages((d.messages || []).map((m) => ({
       role: m.role, content: m.content,
@@ -104,12 +221,28 @@ export default function Page() {
     refreshSessions();
   }
 
+  async function onPickImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setImage(await resizeImage(file)); } catch { alert('이미지를 읽지 못했습니다.'); }
+    e.target.value = '';
+  }
+
+  function buildUserContent(text) {
+    if (!image) return text;
+    return [
+      { type: 'text', text },
+      { type: 'image_url', image_url: { url: image } },
+    ];
+  }
+
   async function send(e) {
     e.preventDefault();
     const text = input.trim();
     if (!text || busy) return;
 
-    // 세션이 없으면 자동 생성
+    if (compareOn) return sendCompare(text);
+
     let sid = sessionId;
     if (!sid) {
       const d = await fetch('/api/sessions', { method: 'POST' }).then((r) => r.json()).catch(() => ({}));
@@ -117,58 +250,31 @@ export default function Page() {
       setSessionId(sid);
     }
 
-    const history = [...messages, { role: 'user', content: text }];
+    const userContent = buildUserContent(text);
+    const history = [...messages, { role: 'user', content: userContent }];
     setMessages(history);
     setInput('');
+    const sentImage = image;
+    setImage(null);
     setBusy(true);
     setStatus('연결 중… (잠들어 있던 서버를 깨우는 중이면 30초쯤 걸릴 수 있어요)');
 
-    let assistantText = '';
-    let meta = null;
+    // 이미지가 있으면 비전 지원 모델로 (auto일 땐 Gemini)
+    const effectiveModel = sentImage && model === 'auto'
+      ? 'GOOGLE'
+      : model === 'auto' ? 'auto' : subModel === 'default' ? model : `${model}/${subModel}`;
+
     const apiMessages = history.map(({ role, content }) => ({ role, content }));
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          messages: apiMessages,
-          model: model === 'auto' ? 'auto' : subModel === 'default' ? model : `${model}/${subModel}`,
-          sessionId: sid,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-      setStatus('응답 생성 중…');
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
       setMessages([...history, { role: 'assistant', content: '', meta: null }]);
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || '';
-        for (const event of events) {
-          for (const line of event.split('\n')) {
-            if (line.startsWith(': gateway ')) {
-              try { meta = JSON.parse(line.slice(10)); } catch {}
-            } else if (line.startsWith('data: ')) {
-              const payload = line.slice(6).trim();
-              if (payload === '[DONE]') continue;
-              try {
-                const chunk = JSON.parse(payload);
-                assistantText += chunk.choices?.[0]?.delta?.content || '';
-              } catch {}
-            }
-          }
-          setMessages([...history, { role: 'assistant', content: assistantText, meta: meta ? { provider: meta.model ? `${meta.provider} (${meta.model})` : meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null }]);
-        }
-      }
-      const finalMeta = meta ? { provider: meta.model ? `${meta.provider} (${meta.model})` : meta.provider, reason: meta.mode === 'auto' ? meta.reason : null } : null;
-      setMessages([...history, { role: 'assistant', content: assistantText || '(빈 응답)', meta: finalMeta }]);
+      const { text: answer, meta } = await streamChat(
+        { messages: apiMessages, model: effectiveModel, sessionId: sid },
+        (partial, m) => {
+          setStatus('응답 생성 중…');
+          setMessages([...history, { role: 'assistant', content: partial, meta: metaLabel(m) }]);
+        },
+      );
+      setMessages([...history, { role: 'assistant', content: answer || '(빈 응답)', meta: metaLabel(meta) }]);
       refreshSessions();
     } catch (err) {
       setMessages([...history, { role: 'assistant', content: `⚠️ 오류: ${err.message}`, meta: null }]);
@@ -176,6 +282,31 @@ export default function Page() {
       setBusy(false);
       setStatus('');
     }
+  }
+
+  async function sendCompare(text) {
+    setInput('');
+    setBusy(true);
+    setStatus('두 모델에 동시에 요청 중…');
+    const run = { prompt: text, results: [{ label: compareA, text: '', meta: null }, { label: compareB, text: '', meta: null }] };
+    const runs = [...compareRuns, run];
+    setCompareRuns(runs);
+    const idx = runs.length - 1;
+    const update = (side, partial, m) => {
+      setCompareRuns((prev) => {
+        const next = prev.map((r, i) => i === idx ? { ...r, results: r.results.map((res, j) => j === side ? { ...res, text: partial, meta: metaLabel(m) } : res) } : r);
+        return next;
+      });
+    };
+    const messagesPayload = [{ role: 'user', content: text }];
+    await Promise.allSettled([
+      streamChat({ messages: messagesPayload, model: compareA }, (t, m) => update(0, t, m))
+        .catch((err) => update(0, `⚠️ ${err.message}`, null)),
+      streamChat({ messages: messagesPayload, model: compareB }, (t, m) => update(1, t, m))
+        .catch((err) => update(1, `⚠️ ${err.message}`, null)),
+    ]);
+    setBusy(false);
+    setStatus('');
   }
 
   if (authed === null) {
@@ -199,6 +330,18 @@ export default function Page() {
     );
   }
 
+  const compareOptions = (
+    <>
+      <option value="auto">🧠 자동</option>
+      {Object.entries(catalog).map(([provider, models]) => (
+        <optgroup key={provider} label={provider}>
+          <option value={provider}>{provider} 기본</option>
+          {models.map((m) => <option key={m} value={`${provider}/${m}`}>{m}</option>)}
+        </optgroup>
+      ))}
+    </>
+  );
+
   const sidebar = (
     <aside style={{
       width: 260, minWidth: 260, borderRight: '1px solid #232838', display: 'flex', flexDirection: 'column',
@@ -213,7 +356,7 @@ export default function Page() {
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
               padding: '10px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2,
-              background: s.id === sessionId ? '#222738' : 'transparent', fontSize: 14,
+              background: s.id === sessionId && !compareOn ? '#222738' : 'transparent', fontSize: 14,
             }}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
             <button onClick={(e) => deleteChat(s.id, e)} title="삭제"
@@ -225,6 +368,12 @@ export default function Page() {
     </aside>
   );
 
+  const badge = (meta) => meta?.provider && (
+    <div style={{ marginTop: 8, fontSize: 12, color: '#8b93a7', borderTop: '1px solid #232838', paddingTop: 6 }}>
+      ⚡ {meta.provider}{meta.reason ? ` — ${meta.reason}` : ''}
+    </div>
+  );
+
   return (
     <div style={{ display: 'flex', height: '100dvh' }}>
       <style>{`
@@ -233,6 +382,14 @@ export default function Page() {
           .desktop-sidebar { display: block; }
           .mobile-menu { display: none; }
         }
+        .md p { margin: 6px 0; }
+        .md ul, .md ol { margin: 6px 0; padding-left: 22px; }
+        .md h1, .md h2, .md h3 { margin: 12px 0 6px; }
+        .md table { border-collapse: collapse; margin: 8px 0; }
+        .md th, .md td { border: 1px solid #2c3140; padding: 5px 10px; font-size: 13px; }
+        .md blockquote { border-left: 3px solid #3a4154; margin: 6px 0; padding-left: 10px; color: #aab2c5; }
+        .compare-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media (min-width: 760px) { .compare-grid { grid-template-columns: 1fr 1fr; } }
       `}</style>
 
       <div className="desktop-sidebar">{sidebar}</div>
@@ -243,67 +400,131 @@ export default function Page() {
         </div>
       )}
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 860, margin: '0 auto', padding: '0 16px', width: '100%', boxSizing: 'border-box' }}>
-        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 0', borderBottom: '1px solid #232838', gap: 8 }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: compareOn ? 1100 : 860, margin: '0 auto', padding: '0 16px', width: '100%', boxSizing: 'border-box' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #232838', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setSidebarOpen(true)} className="mobile-menu"
               style={{ border: '1px solid #2c3140', background: '#1a1e29', color: '#e6e6e6', borderRadius: 8, padding: '7px 11px', cursor: 'pointer', fontSize: 14 }}>☰</button>
-            <div>
-              <strong style={{ fontSize: 17 }}>Awsome AI</strong>
-              <span style={{ color: '#8b93a7', fontSize: 13, marginLeft: 8 }}>free-llm-gateway 채팅</span>
+            <strong style={{ fontSize: 17 }}>Awsome AI</strong>
+            <button onClick={() => setCompareOn(!compareOn)}
+              style={{ border: '1px solid #2c3140', background: compareOn ? '#4f7cff' : '#1a1e29', color: compareOn ? '#fff' : '#8b93a7', borderRadius: 8, padding: '7px 11px', cursor: 'pointer', fontSize: 13 }}>
+              ⚖️ 비교
+            </button>
+          </div>
+          {compareOn ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select value={compareA} onChange={(e) => setCompareA(e.target.value)} style={{ ...selectStyle, maxWidth: 160 }}>{compareOptions}</select>
+              <span style={{ color: '#5b6275', fontSize: 13 }}>vs</span>
+              <select value={compareB} onChange={(e) => setCompareB(e.target.value)} style={{ ...selectStyle, maxWidth: 160 }}>{compareOptions}</select>
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            <select value={model} onChange={(e) => { setModel(e.target.value); setSubModel('default'); }}
-              style={{ background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, maxWidth: 170 }}>
-              {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            {model !== 'auto' && (catalog[model] || []).length > 0 && (
-              <select value={subModel} onChange={(e) => setSubModel(e.target.value)}
-                style={{ background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, maxWidth: 200 }}>
-                <option value="default">기본 모델</option>
-                {(catalog[model] || []).map((m) => <option key={m} value={m}>{m}</option>)}
+          ) : (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <select value={model} onChange={(e) => { setModel(e.target.value); setSubModel('default'); }}
+                style={{ ...selectStyle, maxWidth: 170 }}>
+                {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
-            )}
-          </div>
+              {model !== 'auto' && (catalog[model] || []).length > 0 && (
+                <select value={subModel} onChange={(e) => setSubModel(e.target.value)} style={{ ...selectStyle, maxWidth: 200 }}>
+                  <option value="default">기본 모델</option>
+                  {(catalog[model] || []).map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              )}
+            </div>
+          )}
         </header>
 
         <section style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}>
-          {messages.length === 0 && (
-            <p style={{ color: '#8b93a7', textAlign: 'center', marginTop: 80 }}>
-              무엇이든 물어보세요. 🧠 자동 모드면 프롬프트에 맞는 무료 모델을 AI가 골라줍니다.
-            </p>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-              <div style={{
-                maxWidth: '85%', padding: '10px 14px', borderRadius: 14, fontSize: 15, lineHeight: 1.55,
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                background: m.role === 'user' ? '#4f7cff' : '#1a1e29',
-                color: m.role === 'user' ? '#fff' : '#e6e6e6',
-                border: m.role === 'user' ? 'none' : '1px solid #232838',
-              }}>
-                {m.content}
-                {m.role === 'assistant' && m.meta?.provider && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: '#8b93a7', borderTop: '1px solid #232838', paddingTop: 6 }}>
-                    ⚡ {m.meta.provider}{m.meta.reason ? ` — ${m.meta.reason}` : ''}
+          {compareOn ? (
+            <>
+              {compareRuns.length === 0 && (
+                <p style={{ color: '#8b93a7', textAlign: 'center', marginTop: 80 }}>
+                  ⚖️ 비교 모드: 같은 질문을 두 모델에 동시에 보내 나란히 비교합니다.<br />
+                  <span style={{ fontSize: 13 }}>(비교 결과는 채팅 기록에 저장되지 않습니다)</span>
+                </p>
+              )}
+              {compareRuns.map((run, i) => (
+                <div key={i} style={{ marginBottom: 22 }}>
+                  <div style={{ background: '#4f7cff', color: '#fff', padding: '10px 14px', borderRadius: 14, marginBottom: 10, fontSize: 15 }}>{run.prompt}</div>
+                  <div className="compare-grid">
+                    {run.results.map((r, j) => (
+                      <div key={j} style={{ background: '#1a1e29', border: '1px solid #232838', borderRadius: 14, padding: '10px 14px', fontSize: 14, lineHeight: 1.55, minHeight: 60 }}>
+                        <div style={{ fontSize: 12, color: '#7aa2ff', marginBottom: 6, fontWeight: 600 }}>{r.label}</div>
+                        <Markdown>{r.text || '…'}</Markdown>
+                        {badge(r.meta)}
+                      </div>
+                    ))}
                   </div>
-                )}
-              </div>
-            </div>
-          ))}
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {messages.length === 0 && (
+                <p style={{ color: '#8b93a7', textAlign: 'center', marginTop: 80 }}>
+                  무엇이든 물어보세요. 🧠 자동 모드면 200개+ 무료 모델 중 AI가 골라줍니다.
+                </p>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                  <div style={{
+                    maxWidth: '88%', padding: '10px 14px', borderRadius: 14, fontSize: 15, lineHeight: 1.55,
+                    wordBreak: 'break-word',
+                    background: m.role === 'user' ? '#4f7cff' : '#1a1e29',
+                    color: m.role === 'user' ? '#fff' : '#e6e6e6',
+                    border: m.role === 'user' ? 'none' : '1px solid #232838',
+                  }}>
+                    {m.role === 'user' ? (
+                      <div style={{ whiteSpace: 'pre-wrap' }}>
+                        {typeof m.content === 'string' ? m.content : (
+                          <>
+                            {(m.content || []).filter((c) => c.type === 'text').map((c) => c.text).join(' ')}
+                            {(m.content || []).filter((c) => c.type === 'image_url').map((c, k) => (
+                              <img key={k} src={c.image_url.url} alt="첨부" style={{ display: 'block', maxWidth: 220, borderRadius: 10, marginTop: 8 }} />
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <Markdown>{typeof m.content === 'string' ? m.content : ''}</Markdown>
+                        {badge(m.meta)}
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
           {busy && <p style={{ color: '#8b93a7', fontSize: 13 }}>{status}</p>}
           <div ref={bottomRef} />
         </section>
 
-        <form onSubmit={send} style={{ display: 'flex', gap: 8, padding: '12px 0 18px' }}>
-          <input
-            value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder="메시지를 입력하세요…" style={inputStyle} disabled={busy} autoFocus
-          />
-          <button type="submit" style={{ ...buttonStyle, opacity: busy ? 0.5 : 1 }} disabled={busy}>
-            {busy ? '…' : '전송'}
-          </button>
+        <form onSubmit={send} style={{ padding: '10px 0 18px' }}>
+          {image && !compareOn && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <img src={image} alt="첨부 미리보기" style={{ height: 52, borderRadius: 8 }} />
+              <button type="button" onClick={() => setImage(null)}
+                style={{ border: '1px solid #2c3140', background: '#1a1e29', color: '#8b93a7', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', fontSize: 12 }}>제거</button>
+              <span style={{ color: '#5b6275', fontSize: 12 }}>이미지는 비전 지원 모델(Gemini 등)로 전송됩니다</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {!compareOn && (
+              <>
+                <input ref={fileRef} type="file" accept="image/*" onChange={onPickImage} style={{ display: 'none' }} />
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+                  style={{ border: '1px solid #2c3140', background: '#1a1e29', color: '#8b93a7', borderRadius: 10, padding: '0 14px', cursor: 'pointer', fontSize: 17 }}
+                  title="이미지 첨부">📷</button>
+              </>
+            )}
+            <input
+              value={input} onChange={(e) => setInput(e.target.value)}
+              placeholder={compareOn ? '두 모델에 동시에 보낼 질문…' : '메시지를 입력하세요…'} style={inputStyle} disabled={busy} autoFocus
+            />
+            <button type="submit" style={{ ...buttonStyle, opacity: busy ? 0.5 : 1 }} disabled={busy}>
+              {busy ? '…' : '전송'}
+            </button>
+          </div>
         </form>
       </main>
     </div>

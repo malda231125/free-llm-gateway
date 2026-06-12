@@ -97,6 +97,22 @@ docker compose up -d   # http://localhost:3000
 
 Usage data persists in `./data` via the compose volume. Or build manually: `docker build -t free-ai-gateway . && docker run -p 3000:3000 --env-file .env free-ai-gateway`.
 
+## Free Deployment Options
+
+Tested free ways to host this gateway (as of June 2026):
+
+| Where | Cost | Sleep / cold start | Usage DB persists? | Notes |
+|---|---|---|---|---|
+| **Your own server + [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)** | $0 | Never sleeps | ✅ | Best overall: `docker compose up -d`, free HTTPS domain, server IP stays hidden |
+| **[Render](https://render.com)** (free) | $0 | Sleeps after 15 min, 30–60s wake | ❌ (resets on deploy) | Easiest: connect repo, no card. This repo runs on it |
+| **[Google Cloud Run](https://cloud.google.com/run)** | $0 within free tier | Scale-to-zero, 1–3s wake | ❌ | 2M req/month free; needs a card and the Dockerfile (already included) |
+| **[Hugging Face Spaces](https://huggingface.co/spaces)** (Docker) | $0 | Sleeps after 48h idle | ❌ (persistent storage is paid) | Surprisingly beefy free tier: 2 vCPU / 16GB RAM / 50GB disk |
+| **[Oracle Cloud Always Free](https://www.oracle.com/cloud/free/)** | $0 | Never sleeps | ✅ | ARM 4-core/24GB VM forever-free; signup is picky, you manage the VM |
+
+Avoid for free use: **Fly.io** (free tier discontinued — new accounts get a 2-hour trial) and **Railway** (one-time $5 credit, then paid).
+
+A good combo: Render for a public demo URL + your own server (via Tunnel) for real always-on usage.
+
 ## OpenAI-Compatible Endpoint (drop-in)
 
 `POST /v1/chat/completions` speaks the standard OpenAI protocol — multi-turn `messages`, `temperature`, `stream`, etc. Point any OpenAI SDK at the gateway and it just works:

@@ -97,6 +97,22 @@ docker compose up -d   # http://localhost:3000
 
 사용량 데이터는 compose 볼륨으로 `./data`에 영속화됩니다. 수동 빌드: `docker build -t free-ai-gateway . && docker run -p 3000:3000 --env-file .env free-ai-gateway`
 
+## 무료 배포 옵션
+
+이 게이트웨이를 무료로 호스팅하는 검증된 방법들입니다 (2026년 6월 기준):
+
+| 어디에 | 비용 | 슬립/콜드스타트 | 사용량 DB 영속? | 비고 |
+|---|---|---|---|---|
+| **자기 서버 + [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)** | 0원 | 슬립 없음 | ✅ | 종합 최고: `docker compose up -d` 한 줄, 무료 HTTPS 도메인, 서버 IP 비노출 |
+| **[Render](https://render.com)** (free) | 0원 | 15분 유휴 시 슬립, 깨우기 30-60초 | ❌ (재배포 시 초기화) | 가장 간단: 레포 연결만, 카드 불필요. 이 레포도 Render에서 구동 중 |
+| **[Google Cloud Run](https://cloud.google.com/run)** | 무료 한도 내 0원 | scale-to-zero, 깨우기 1-3초 | ❌ | 월 200만 요청 무료. 카드 필요, Dockerfile은 이미 포함돼 있음 |
+| **[Hugging Face Spaces](https://huggingface.co/spaces)** (Docker) | 0원 | 48시간 유휴 시 슬립 | ❌ (영속 스토리지 유료) | 무료 스펙이 의외로 강력: 2 vCPU / 16GB RAM / 50GB 디스크 |
+| **[Oracle Cloud Always Free](https://www.oracle.com/cloud/free/)** | 0원 | 슬립 없음 | ✅ | ARM 4코어/24GB VM 평생 무료. 가입 까다롭고 VM 직접 관리 |
+
+무료로 쓰기엔 피할 곳: **Fly.io**(무료 티어 종료 — 신규는 2시간 체험뿐), **Railway**(1회성 $5 크레딧 후 유료).
+
+추천 조합: Render로 공개 데모 URL 유지 + 자기 서버(Tunnel)로 슬립 없는 실사용 인스턴스.
+
 ## OpenAI 호환 엔드포인트 (드롭인)
 
 `POST /v1/chat/completions`는 표준 OpenAI 프로토콜을 그대로 지원합니다 — 멀티턴 `messages`, `temperature`, `stream` 등. OpenAI SDK의 base_url만 게이트웨이로 바꾸면 코드 수정 없이 동작합니다:

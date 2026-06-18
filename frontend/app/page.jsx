@@ -30,6 +30,49 @@ const selectStyle = {
   borderRadius: 8, padding: '8px 10px', fontSize: 13,
 };
 
+const MODEL_TAGS = [
+  { id: 'reasoning', label: '강한 추론', emoji: '🧠' },
+  { id: 'fast', label: '빠른 응답', emoji: '⚡' },
+  { id: 'coding', label: '코딩', emoji: '💻' },
+  { id: 'vision', label: '이미지/비전', emoji: '👁️' },
+  { id: 'long', label: '긴 컨텍스트', emoji: '📚' },
+  { id: 'efficient', label: '가성비/경량', emoji: '🌱' },
+  { id: 'multilingual', label: '한국어/다국어', emoji: '🌏' },
+  { id: 'open', label: '오픈모델', emoji: '🔓' },
+];
+
+const TAG_BY_ID = Object.fromEntries(MODEL_TAGS.map((tag) => [tag.id, tag]));
+
+function modelSearchText({ provider = '', id = '', description = '' }) {
+  return `${provider} ${id} ${description}`.toLowerCase();
+}
+
+function inferModelTags({ provider = '', id = '', description = '' }) {
+  const text = modelSearchText({ provider, id, description });
+  const tags = new Set();
+
+  if (/(reason|thinking|r1|qwq|qwen3|o[134]|gpt-4|gemini-2\.5-pro|claude-3\.7|claude-4|deepseek-r1|magistral)/i.test(text)) tags.add('reasoning');
+  if (/(groq|cerebras|flash|instant|haiku|mini|lite|small|8b|7b|3b|1b|fast|turbo|speed)/i.test(text)) tags.add('fast');
+  if (/(code|coder|coding|codestral|devstral|qwen.*coder|deepseek-coder|starcoder|gpt-4\.1|claude|kimi-k2)/i.test(text)) tags.add('coding');
+  if (/(vision|visual|vl\b|v[- ]?l|multimodal|image|pixtral|llava|qwen.*vl|gemini|llama-4|maverick|scout)/i.test(text)) tags.add('vision');
+  if (/(long|context|128k|200k|256k|1m|million|gemini|llama-4|mistral-large|command-r)/i.test(text)) tags.add('long');
+  if (/(free|cheap|efficient|nano|mini|lite|small|8b|7b|3b|1b|gemma|phi|haiku|flash)/i.test(text)) tags.add('efficient');
+  if (/(korean|한국|ko\b|multilingual|qwen|gemini|mistral|llama|solar|exaone|aya)/i.test(text)) tags.add('multilingual');
+  if (/(llama|qwen|mistral|mixtral|deepseek|gemma|phi|yi|open|oss|command-r|nemotron|granite)/i.test(text)) tags.add('open');
+
+  if (provider === 'GROQ' || provider === 'CEREBRAS') tags.add('fast');
+  if (provider === 'GOOGLE') { tags.add('vision'); tags.add('long'); tags.add('multilingual'); }
+  if (provider === 'MISTRAL') { tags.add('open'); tags.add('multilingual'); }
+  if (provider === 'GITHUB') tags.add('coding');
+  if (provider === 'NVIDIA') tags.add('open');
+
+  return [...tags];
+}
+
+function tagLabels(tagIds = []) {
+  return tagIds.map((id) => TAG_BY_ID[id]).filter(Boolean).map((tag) => `${tag.emoji} ${tag.label}`);
+}
+
 function CodeBlock({ className, children, ...props }) {
   const [copied, setCopied] = useState(false);
   const isBlock = String(className || '').includes('language-') || String(children).includes('\n');
@@ -73,6 +116,7 @@ function Markdown({ children }) {
 function ModelPicker({ options, value, onChange, width = 220, placeholder = '모델 검색…' }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [activeTag, setActiveTag] = useState('');
   const boxRef = useRef(null);
 
   useEffect(() => {
@@ -81,22 +125,44 @@ function ModelPicker({ options, value, onChange, width = 220, placeholder = '모
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const q = query.toLowerCase();
-  const filtered = q
-    ? options.filter((o) => `${o.value} ${o.label} ${o.desc || ''}`.toLowerCase().includes(q))
-    : options;
+  const tagCounts = MODEL_TAGS.map((tag) => ({
+    ...tag,
+    count: options.filter((o) => (o.tags || []).includes(tag.id)).length,
+  })).filter((tag) => tag.count > 0);
+  const q = query.toLowerCase().trim();
+  const filtered = options.filter((o) => {
+    const tags = o.tags || [];
+    if (activeTag && !tags.includes(activeTag)) return false;
+    if (!q) return true;
+    const keywords = tagLabels(tags).join(' ');
+    return `${o.value} ${o.label} ${o.desc || ''} ${keywords}`.toLowerCase().includes(q);
+  });
   const current = options.find((o) => o.value === value);
 
   return (
     <div ref={boxRef} style={{ position: 'relative', width }}>
-      <button type="button" onClick={() => { setOpen(!open); setQuery(''); }}
+      <button type="button" onClick={() => { setOpen(!open); setQuery(''); setActiveTag(''); }}
         style={{ width: '100%', textAlign: 'left', background: '#1a1e29', color: '#e6e6e6', border: '1px solid #2c3140', borderRadius: 8, padding: '8px 10px', fontSize: 13, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {current ? current.label : value} ▾
       </button>
       {open && (
-        <div style={{ position: 'fixed', left: 12, right: 12, top: 110, zIndex: 50, maxWidth: 420, margin: '0 auto', background: '#12141c', border: '1px solid #2c3140', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
+        <div style={{ position: 'fixed', left: 12, right: 12, top: 110, zIndex: 50, maxWidth: 520, margin: '0 auto', background: '#12141c', border: '1px solid #2c3140', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
           <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={placeholder}
             style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', background: 'transparent', border: 'none', borderBottom: '1px solid #232838', color: '#e6e6e6', fontSize: 13, outline: 'none' }} />
+          {tagCounts.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '9px 10px', borderBottom: '1px solid #232838' }}>
+              <button type="button" onClick={() => setActiveTag('')}
+                style={{ border: '1px solid #2c3140', background: activeTag ? '#1a1e29' : '#4f7cff', color: activeTag ? '#8b93a7' : '#fff', borderRadius: 999, padding: '5px 9px', fontSize: 11.5, cursor: 'pointer' }}>
+                전체 {options.length}
+              </button>
+              {tagCounts.map((tag) => (
+                <button key={tag.id} type="button" onClick={() => setActiveTag(activeTag === tag.id ? '' : tag.id)}
+                  style={{ border: '1px solid #2c3140', background: activeTag === tag.id ? '#4f7cff' : '#1a1e29', color: activeTag === tag.id ? '#fff' : '#c8cfdd', borderRadius: 999, padding: '5px 9px', fontSize: 11.5, cursor: 'pointer' }}>
+                  {tag.emoji} {tag.label} {tag.count}
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ maxHeight: 320, overflowY: 'auto' }}>
             {filtered.length === 0 && <p style={{ color: '#5b6275', fontSize: 13, textAlign: 'center', padding: 14 }}>검색 결과 없음</p>}
             {filtered.slice(0, 100).map((o) => (
@@ -105,6 +171,13 @@ function ModelPicker({ options, value, onChange, width = 220, placeholder = '모
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#1d2230'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = o.value === value ? '#222738' : 'transparent'; }}>
                 <div style={{ fontSize: 13, color: '#e6e6e6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</div>
+                {(o.tags || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>
+                    {tagLabels(o.tags).slice(0, 4).map((label) => (
+                      <span key={label} style={{ fontSize: 10.5, color: '#aab2c5', background: '#202637', border: '1px solid #30384b', borderRadius: 999, padding: '2px 6px' }}>{label}</span>
+                    ))}
+                  </div>
+                )}
                 {o.desc && <div style={{ fontSize: 11.5, color: '#7d8598', marginTop: 2, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{o.desc}</div>}
               </div>
             ))}
@@ -381,10 +454,15 @@ export default function Page() {
   }
 
   const compareOptions = [
-    { value: 'auto', label: '🧠 자동 (AI 라우팅)', desc: '프롬프트에 맞는 모델을 AI가 선택' },
+    { value: 'auto', label: '🧠 자동 (AI 라우팅)', desc: '프롬프트에 맞는 모델을 AI가 선택', tags: ['reasoning'] },
     ...Object.entries(catalog).flatMap(([provider, models]) => [
-      { value: provider, label: `${provider} 기본`, desc: '' },
-      ...models.map((m) => ({ value: `${provider}/${m.id}`, label: `${provider} · ${m.id}`, desc: m.description })),
+      { value: provider, label: `${provider} 기본`, desc: '', tags: inferModelTags({ provider, id: provider }) },
+      ...models.map((m) => ({
+        value: `${provider}/${m.id}`,
+        label: `${provider} · ${m.id}`,
+        desc: m.description,
+        tags: inferModelTags({ provider, id: m.id, description: m.description }),
+      })),
     ]),
   ];
 
@@ -480,8 +558,13 @@ export default function Page() {
                     value={subModel}
                     onChange={setSubModel}
                     options={[
-                      { value: 'default', label: '기본 모델', desc: '프로바이더 추천 기본값' },
-                      ...(catalog[model] || []).map((m) => ({ value: m.id, label: m.id, desc: m.description })),
+                      { value: 'default', label: '기본 모델', desc: '프로바이더 추천 기본값', tags: inferModelTags({ provider: model, id: model }) },
+                      ...(catalog[model] || []).map((m) => ({
+                        value: m.id,
+                        label: m.id,
+                        desc: m.description,
+                        tags: inferModelTags({ provider: model, id: m.id, description: m.description }),
+                      })),
                     ]}
                   />
                 </div>

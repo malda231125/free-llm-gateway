@@ -417,6 +417,19 @@ export default function Page() {
   }
 
   async function sendCompare(text) {
+    let sid = sessionId;
+    if (!sid) {
+      const d = await fetch('/api/sessions', { method: 'POST' }).then((r) => r.json()).catch(() => ({}));
+      sid = d.session?.id || null;
+      setSessionId(sid);
+    }
+    if (sid) {
+      await fetch(`/api/sessions/${sid}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role: 'user', content: text }),
+      }).catch(() => {});
+    }
     setInput('');
     setBusy(true);
     setStatus('두 모델에 동시에 요청 중…');
@@ -432,11 +445,12 @@ export default function Page() {
     };
     const messagesPayload = [{ role: 'user', content: text }];
     await Promise.allSettled([
-      streamChat({ messages: messagesPayload, model: compareA }, (t, m) => update(0, t, m))
+      streamChat({ messages: messagesPayload, model: compareA, sessionId: sid, saveUser: false }, (t, m) => update(0, t, m))
         .catch((err) => update(0, `⚠️ ${err.message}`, null)),
-      streamChat({ messages: messagesPayload, model: compareB }, (t, m) => update(1, t, m))
+      streamChat({ messages: messagesPayload, model: compareB, sessionId: sid, saveUser: false }, (t, m) => update(1, t, m))
         .catch((err) => update(1, `⚠️ ${err.message}`, null)),
     ]);
+    refreshSessions();
     setBusy(false);
     setStatus('');
   }
@@ -601,7 +615,7 @@ export default function Page() {
               {compareRuns.length === 0 && (
                 <p style={{ color: '#8b93a7', textAlign: 'center', marginTop: 80 }}>
                   ⚖️ 비교 모드: 같은 질문을 두 모델에 동시에 보내 나란히 비교합니다.<br />
-                  <span style={{ fontSize: 13 }}>(비교 결과는 채팅 기록에 저장되지 않습니다)</span>
+                  <span style={{ fontSize: 13 }}>(비교 결과는 같은 채팅 이력에 모델별 답변으로 저장됩니다)</span>
                 </p>
               )}
               {compareRuns.map((run, i) => (

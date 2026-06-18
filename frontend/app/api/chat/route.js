@@ -22,7 +22,7 @@ export async function POST(request) {
   if (!isAuthed(request)) {
     return Response.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
-  const { messages, model, sessionId } = await request.json().catch(() => ({}));
+  const { messages, model, sessionId, saveUser = true } = await request.json().catch(() => ({}));
   if (!Array.isArray(messages) || !messages.length) {
     return Response.json({ error: 'messages가 필요합니다.' }, { status: 400 });
   }
@@ -40,7 +40,7 @@ export async function POST(request) {
     ? lastUser.content
     : (lastUser?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join(' ') +
       ((lastUser?.content || []).some((c) => c.type === 'image_url') ? ' [이미지 첨부]' : '');
-  if (session && lastUser) {
+  if (saveUser && session && lastUser) {
     await prisma.chatMessage.create({ data: { sessionId: session.id, role: 'user', content: userText } });
     if (session._count.messages === 0) {
       await prisma.chatSession.update({
@@ -89,7 +89,7 @@ export async function POST(request) {
                 sessionId: sessionIdToSave,
                 role: 'assistant',
                 content,
-                provider: meta?.provider || null,
+                provider: meta?.provider ? (meta.model ? `${meta.provider} (${meta.model})` : meta.provider) : null,
                 reason: meta?.mode === 'auto' ? meta?.reason || null : null,
               },
             }).catch(() => {});

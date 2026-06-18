@@ -284,6 +284,7 @@ export default function Page() {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const messagesViewportRef = useRef(null);
   const stickToBottomRef = useRef(true);
+  const lastTouchYRef = useRef(null);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
 
@@ -312,15 +313,36 @@ export default function Page() {
     setShowJumpToLatest(false);
   }
 
+  function pauseAutoScroll() {
+    stickToBottomRef.current = false;
+    setShowJumpToLatest(true);
+  }
+
   function handleMessagesScroll() {
     const nearBottom = isNearBottom(messagesViewportRef.current);
     stickToBottomRef.current = nearBottom;
     setShowJumpToLatest(!nearBottom);
   }
 
+  function handleMessagesWheel(e) {
+    if (e.deltaY < 0) pauseAutoScroll();
+  }
+
+  function handleMessagesTouchStart(e) {
+    lastTouchYRef.current = e.touches?.[0]?.clientY ?? null;
+  }
+
+  function handleMessagesTouchMove(e) {
+    const nextY = e.touches?.[0]?.clientY ?? null;
+    if (nextY !== null && lastTouchYRef.current !== null && nextY > lastTouchYRef.current + 4) {
+      pauseAutoScroll();
+    }
+    lastTouchYRef.current = nextY;
+  }
+
   useEffect(() => {
     if (stickToBottomRef.current) {
-      scrollToLatest('smooth');
+      scrollToLatest('auto');
     } else {
       setShowJumpToLatest(true);
     }
@@ -640,6 +662,9 @@ export default function Page() {
         <section
           ref={messagesViewportRef}
           onScroll={handleMessagesScroll}
+          onWheel={handleMessagesWheel}
+          onTouchStart={handleMessagesTouchStart}
+          onTouchMove={handleMessagesTouchMove}
           style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}
         >
           {compareOn ? (

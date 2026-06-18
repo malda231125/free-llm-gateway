@@ -37,6 +37,7 @@ try {
         const bottom = document.querySelector('#bottom');
         const jump = document.querySelector('#jump');
         let stickToBottom = true;
+        let lastTouchY = null;
 
         function syncIntent() {
           stickToBottom = isNearBottom(messages);
@@ -44,9 +45,28 @@ try {
         }
 
         function scrollToLatest() {
-          bottom.scrollIntoView({ block: 'end' });
+          bottom.scrollIntoView({ behavior: 'auto', block: 'end' });
           stickToBottom = true;
           jump.hidden = true;
+        }
+
+        function pauseAutoScroll() {
+          stickToBottom = false;
+          jump.hidden = false;
+        }
+
+        function onWheel(event) {
+          if (event.deltaY < 0) pauseAutoScroll();
+        }
+
+        function onTouchStart(event) {
+          lastTouchY = event.touches[0]?.clientY ?? null;
+        }
+
+        function onTouchMove(event) {
+          const nextY = event.touches[0]?.clientY ?? null;
+          if (nextY !== null && lastTouchY !== null && nextY > lastTouchY + 4) pauseAutoScroll();
+          lastTouchY = nextY;
         }
 
         function appendChunk(text) {
@@ -60,6 +80,9 @@ try {
         }
 
         messages.addEventListener('scroll', syncIntent);
+        messages.addEventListener('wheel', onWheel);
+        messages.addEventListener('touchstart', onTouchStart);
+        messages.addEventListener('touchmove', onTouchMove);
         jump.addEventListener('click', scrollToLatest);
         window.testApi = { appendChunk, messages, jump };
       </script>
@@ -84,6 +107,18 @@ try {
 
     assert.equal(afterStreamScrollTop, readingScrollTop, `${viewport.name}: stream should not force scroll while reading`);
     assert.equal(jumpVisible, true, `${viewport.name}: latest button should appear while reading`);
+
+    await page.evaluate(() => {
+      window.testApi.messages.scrollTop = window.testApi.messages.scrollHeight;
+      window.testApi.messages.dispatchEvent(new Event('scroll'));
+      window.testApi.messages.dispatchEvent(new WheelEvent('wheel', { deltaY: -120 }));
+    });
+    const userIntentScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    await page.evaluate(() => {
+      for (let i = 0; i < 10; i += 1) window.testApi.appendChunk('user intent stream ' + i);
+    });
+    const afterUserIntentScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    assert.equal(afterUserIntentScrollTop, userIntentScrollTop, `${viewport.name}: upward user scroll intent should stop auto-scroll immediately`);
 
     await page.click('#jump');
     const afterJumpScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);

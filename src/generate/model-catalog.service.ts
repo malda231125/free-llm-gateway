@@ -7,6 +7,15 @@ export interface CatalogModel {
   description: string;
 }
 
+export type ModelRouteCategory = 'reasoning' | 'fast' | 'vision' | 'long';
+
+export const ROUTE_CATEGORY_LABELS: Record<ModelRouteCategory, string> = {
+  reasoning: '강한 추론',
+  fast: '빠른 응답',
+  vision: '이미지/비전',
+  long: '긴 컨텍스트',
+};
+
 export interface ProviderCatalog {
   provider: AiProvider;
   defaultModel: string;
@@ -63,6 +72,18 @@ const HIGHLIGHT_PATTERNS = [
   /gpt-4\.1/i, /gpt-4o/i, /mistral-large/i, /glm/i, /gemma/i, /kimi/i,
 ];
 
+const CATEGORY_PATTERNS: Record<ModelRouteCategory, RegExp[]> = {
+  reasoning: [/deepseek-r1/i, /r1/i, /reason/i, /thinking/i, /qwq/i, /qwen3/i, /gpt-oss/i, /nemotron.*ultra/i, /o[134](-|$)/i, /magistral/i, /gemini-2\.5-pro/i],
+  fast: [/flash/i, /flash-lite/i, /lite/i, /mini/i, /small/i, /nano/i, /8b/i, /7b/i, /3b/i, /instant/i, /haiku/i, /llama-3\.1-8b/i],
+  vision: [/vision/i, /visual/i, /\bvl\b/i, /v[- ]?l/i, /multimodal/i, /pixtral/i, /llava/i, /qwen.*vl/i, /gemini/i, /llama-4/i, /maverick/i, /scout/i],
+  long: [/long/i, /context/i, /128k/i, /200k/i, /256k/i, /1m/i, /million/i, /gemini/i, /llama-4/i, /mistral-large/i, /command-r/i, /kimi/i],
+};
+
+function matchesCategory(model: CatalogModel, category: ModelRouteCategory): boolean {
+  const text = `${model.id} ${model.description}`;
+  return CATEGORY_PATTERNS[category].some((pattern) => pattern.test(text));
+}
+
 /**
  * 프로바이더별 모델 카탈로그를 OpenAI 호환 /models 엔드포인트에서 수집한다 (10분 캐시).
  * 무료 등급에서 쓸 수 없는 모델(임베딩/TTS/이미지, OpenRouter 유료 등)은 걸러낸다.
@@ -103,6 +124,25 @@ export class ModelCatalogService {
           if (found) picks.push(found);
         }
       }
+      out.set(provider, picks);
+    }
+    return out;
+  }
+
+  /** 특정 자동 라우팅 카테고리에 맞는 후보를 라우터 프롬프트용으로 압축한다. */
+  async categoryHighlights(providers: AiProvider[], category: ModelRouteCategory, limit = 8): Promise<Map<AiProvider, CatalogModel[]>> {
+    const out = new Map<AiProvider, CatalogModel[]>();
+    let data: ProviderCatalog[] = [];
+    try {
+      data = await this.catalog();
+    } catch { /* 카탈로그 실패 시 기본 모델만 */ }
+    for (const provider of providers) {
+      const entry = data.find((c) => c.provider === provider);
+      const categoryModels = (entry?.models || []).filter((m) => matchesCategory(m, category));
+      const picks: CatalogModel[] = categoryModels.slice(0, limit);
+      const defaultModel = entry?.models.find((m) => m.id === PROVIDERS[provider].defaultModel)
+        || { id: PROVIDERS[provider].defaultModel, description: familyDescription(PROVIDERS[provider].defaultModel) };
+      if (!picks.length && matchesCategory(defaultModel, category)) picks.push(defaultModel);
       out.set(provider, picks);
     }
     return out;

@@ -41,6 +41,14 @@ const MODEL_TAGS = [
   { id: 'open', label: '오픈모델', emoji: '🔓' },
 ];
 
+const AUTO_ROUTE_CATEGORIES = [
+  { value: 'any', label: '전체 자동', desc: '프롬프트에 맞춰 전체 후보에서 라우팅' },
+  { value: 'reasoning', label: '🧠 강한 추론', desc: '수학, 분석, 복잡한 문제 해결 후보 안에서 라우팅' },
+  { value: 'fast', label: '⚡ 빠른 응답', desc: '짧은 질의, 초안, 반복 작업용 고속 후보 안에서 라우팅' },
+  { value: 'vision', label: '👁️ 이미지/비전', desc: '이미지 이해와 멀티모달 후보 안에서 라우팅' },
+  { value: 'long', label: '📚 긴 컨텍스트', desc: '긴 문서, 요약, 대량 컨텍스트 후보 안에서 라우팅' },
+];
+
 const TAG_BY_ID = Object.fromEntries(MODEL_TAGS.map((tag) => [tag.id, tag]));
 
 function modelSearchText({ provider = '', id = '', description = '' }) {
@@ -261,6 +269,7 @@ export default function Page() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [model, setModel] = useState('auto');
+  const [autoCategory, setAutoCategory] = useState('any');
   const [catalog, setCatalog] = useState({});
   const [subModel, setSubModel] = useState('default');
   const [busy, setBusy] = useState(false);
@@ -384,8 +393,8 @@ export default function Page() {
 
     // 이미지가 있으면 비전 지원 모델로 (auto일 땐 Gemini)
     const effectiveModel = sentImage && model === 'auto'
-      ? 'GOOGLE'
-      : model === 'auto' ? 'auto' : subModel === 'default' ? model : `${model}/${subModel}`;
+      ? 'auto:vision'
+      : model === 'auto' ? (autoCategory === 'any' ? 'auto' : `auto:${autoCategory}`) : subModel === 'default' ? model : `${model}/${subModel}`;
 
     const apiMessages = history.map(({ role, content }) => ({ role, content }));
     try {
@@ -455,6 +464,12 @@ export default function Page() {
 
   const compareOptions = [
     { value: 'auto', label: '🧠 자동 (AI 라우팅)', desc: '프롬프트에 맞는 모델을 AI가 선택', tags: ['reasoning'] },
+    ...AUTO_ROUTE_CATEGORIES.filter((c) => c.value !== 'any').map((c) => ({
+      value: `auto:${c.value}`,
+      label: `자동 · ${c.label}`,
+      desc: `${c.desc} — Gemini 라우터가 최종 모델 선택`,
+      tags: [c.value],
+    })),
     ...Object.entries(catalog).flatMap(([provider, models]) => [
       { value: provider, label: `${provider} 기본`, desc: '', tags: inferModelTags({ provider, id: provider }) },
       ...models.map((m) => ({
@@ -551,6 +566,13 @@ export default function Page() {
                 style={{ ...selectStyle, flex: 1, minWidth: 0, maxWidth: 190 }}>
                 {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
+              {model === 'auto' && (
+                <select value={autoCategory} onChange={(e) => setAutoCategory(e.target.value)}
+                  title="자동 라우팅 카테고리"
+                  style={{ ...selectStyle, flex: 1.1, minWidth: 0, maxWidth: 190 }}>
+                  {AUTO_ROUTE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+              )}
               {model !== 'auto' && (catalog[model] || []).length > 0 && (
                 <div style={{ flex: 1.2, minWidth: 0 }}>
                   <ModelPicker

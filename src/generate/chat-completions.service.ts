@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { AiProvider, PROVIDERS } from './providers.config';
 import { KeyPoolService } from './key-pool.service';
 import { ModelRouterService, Recommendation } from './model-router.service';
+import { ModelRouteCategory, ROUTE_CATEGORY_LABELS } from './model-catalog.service';
 import { RateLimiterService } from './rate-limiter.service';
 import { UsageStoreService } from './usage-store.service';
 
@@ -20,6 +21,8 @@ interface ResolvedTarget {
   provider: AiProvider;
   model: string;
 }
+
+const AUTO_ROUTE_CATEGORIES = new Set<ModelRouteCategory>(['reasoning', 'fast', 'vision', 'long']);
 
 /**
  * OpenAI 호환 /v1/chat/completions 처리.
@@ -92,8 +95,14 @@ export class ChatCompletionsService {
     recommendation: Recommendation | null;
   }> {
     const raw = String(body?.model || 'auto').trim();
+    const autoMatch = raw.match(/^auto(?::|\/)(reasoning|fast|vision|long)$/i);
+    const routeCategory = autoMatch?.[1]?.toLowerCase() as ModelRouteCategory | undefined;
 
-    if (raw && raw.toLowerCase() !== 'auto') {
+    if (routeCategory && !AUTO_ROUTE_CATEGORIES.has(routeCategory)) {
+      throw new BadRequestException({ error: { message: `unknown auto route category "${routeCategory}"`, type: 'invalid_request_error' } });
+    }
+
+    if (raw && raw.toLowerCase() !== 'auto' && !routeCategory) {
       const [head, ...rest] = raw.split('/');
       const providerName = head.toUpperCase() as AiProvider;
       if (PROVIDERS[providerName]) {
@@ -117,7 +126,7 @@ export class ChatCompletionsService {
 
     const lastUserMessage = [...body.messages].reverse().find((m: any) => m?.role === 'user');
     const routePrompt = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : JSON.stringify(lastUserMessage?.content ?? '');
-    const recommendation = await this.router.recommend(routePrompt, candidates);
+    const recommendation = await this.router.recommend(routePrompt, candidates, routeCategory);
     const orderedProviders = recommendation
       ? [recommendation.provider, ...candidates.filter((p) => p !== recommendation!.provider)]
       : candidates;
@@ -127,7 +136,14 @@ export class ChatCompletionsService {
         model: p === recommendation?.provider && recommendation?.model ? recommendation.model : PROVIDERS[p].defaultModel,
       })),
       mode: 'auto',
-      recommendation,
+      recommendation: recommendation
+        ? {
+          ...recommendation,
+          reason: routeCategory
+            ? `[${ROUTE_CATEGORY_LABELS[routeCategory]}] ${recommendation.reason}`
+            : recommendation.reason,
+        }
+        : recommendation,
     };
   }
 

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiProvider, PROVIDERS } from './providers.config';
-import { ModelCatalogService } from './model-catalog.service';
+import { ModelCatalogService, ModelRouteCategory, ROUTE_CATEGORY_LABELS } from './model-catalog.service';
 import { RateLimiterService } from './rate-limiter.service';
 import { UsageStoreService } from './usage-store.service';
 
@@ -23,19 +23,25 @@ export class ModelRouterService {
     private readonly catalog: ModelCatalogService,
   ) {}
 
-  async recommend(prompt: string, candidates: AiProvider[]): Promise<Recommendation | null> {
+  async recommend(prompt: string, candidates: AiProvider[], category?: ModelRouteCategory): Promise<Recommendation | null> {
     if (candidates.length < 2) return null;
-    const highlights = await this.catalog.highlights(candidates);
+    const highlights = category
+      ? await this.catalog.categoryHighlights(candidates, category)
+      : await this.catalog.highlights(candidates);
     const lines: string[] = [];
     for (const p of candidates) {
+      const models = highlights.get(p) || [];
+      if (category && models.length === 0) continue;
       lines.push(`- ${p} (${PROVIDERS[p].description})`);
-      for (const m of highlights.get(p) || []) {
+      for (const m of models) {
         lines.push(`    * ${p}/${m.id}${m.description ? ` — ${m.description.slice(0, 60)}` : ''}`);
       }
     }
+    if (!lines.length) return null;
 
     const routerPrompt = [
       '너는 AI 모델 라우터다. 아래 후보 중 사용자 요청을 처리하기에 가장 적합한 모델 하나를 골라라.',
+      category ? `사용자가 먼저 선택한 카테고리: ${ROUTE_CATEGORY_LABELS[category]}. 이 카테고리 후보 범위 안에서만 골라라.` : '',
       '판단 기준: 속도가 중요한 짧은 작업은 빠른 프로바이더의 경량 모델, 복잡한 추론은 추론 특화 모델(DeepSeek-R1 등),',
       '코딩은 코드 특화 모델, 번역·긴 글·한국어는 품질 좋은 범용 모델. 모델 패밀리의 일반적 특성을 활용하라.',
       '반드시 JSON 한 줄로만 답하라: {"choice":"PROVIDER/모델ID (목록에 있는 것 그대로)","reason":"<한 문장 한국어 이유>"}',

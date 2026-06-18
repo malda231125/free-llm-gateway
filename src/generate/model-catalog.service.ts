@@ -84,6 +84,71 @@ function matchesCategory(model: CatalogModel, category: ModelRouteCategory): boo
   return CATEGORY_PATTERNS[category].some((pattern) => pattern.test(text));
 }
 
+function modelRank(provider: AiProvider, model: CatalogModel): number {
+  const text = `${model.id} ${model.description}`.toLowerCase();
+  let score = 0;
+
+  // 최신 세대/상위 모델 우선
+  if (/gemini-3|gpt-5|claude-4|llama-4|deepseek.*v4|qwen3|kimi-k2/.test(text)) score += 120;
+  if (/gemini-2\.5|gpt-4\.1|gpt-4o|llama-3\.3|deepseek-r1|gpt-oss-120b|mistral-large|magistral|nemotron.*ultra/.test(text)) score += 95;
+  if (/llama-3\.1|mixtral|codestral|devstral|gemma-3|gemma-4|phi-4/.test(text)) score += 70;
+
+  // 성능/특화 힌트
+  if (/pro|large|ultra|120b|70b|72b|405b|671b|reason|thinking|r1/.test(text)) score += 28;
+  if (/coder|code|codestral|devstral/.test(text)) score += 20;
+  if (/vision|visual|\bvl\b|multimodal|pixtral|llava|maverick|scout/.test(text)) score += 16;
+  if (/long|128k|200k|256k|1m|million|context/.test(text)) score += 12;
+  if (/latest|preview|experimental|exp/.test(text)) score += 10;
+
+  // 너무 작은/레거시/특수 목적 모델은 아래로
+  if (/mini|small|lite|nano|8b|7b|3b|1b/.test(text)) score -= 12;
+  if (/embedding|embed|rerank|guard|moderation|tts|whisper|audio|image|ocr|transcribe/.test(text)) score -= 100;
+  if (/deprecated|legacy|old/.test(text)) score -= 60;
+
+  // provider별 체감 우선순위 보정
+  if (provider === AiProvider.GOOGLE) {
+    if (/gemini-2\.5-pro/.test(text)) score += 35;
+    if (/gemini-2\.5-flash/.test(text)) score += 25;
+    if (/flash-lite/.test(text)) score -= 8;
+  }
+  if (provider === AiProvider.GROQ) {
+    if (/llama-3\.3-70b/.test(text)) score += 35;
+    if (/deepseek-r1|qwen.*32b|openai\/gpt-oss-120b|gpt-oss-120b/.test(text)) score += 28;
+    if (/instant|8b/.test(text)) score += 8; // Groq에서는 빠른 응답용 상위 노출 가치가 있음
+  }
+  if (provider === AiProvider.CEREBRAS) {
+    if (/gpt-oss-120b/.test(text)) score += 40;
+    if (/qwen-3|qwen3/.test(text)) score += 28;
+  }
+  if (provider === AiProvider.MISTRAL) {
+    if (/large-latest|mistral-large|magistral|codestral|devstral/.test(text)) score += 34;
+    if (/small-latest/.test(text)) score += 18;
+  }
+  if (provider === AiProvider.NVIDIA) {
+    if (/llama-3\.3-70b|nemotron.*ultra|deepseek-r1|qwen3/.test(text)) score += 35;
+  }
+  if (provider === AiProvider.OPENROUTER) {
+    if (/deepseek|qwen3|llama-4|gemini|gpt-oss|kimi/.test(text)) score += 32;
+  }
+  if (provider === AiProvider.GITHUB) {
+    if (/gpt-4\.1|gpt-4o|o[134]|claude|mistral-large|llama-3\.3/.test(text)) score += 35;
+    if (/gpt-4o-mini/.test(text)) score += 12;
+  }
+
+  // 같은 점수면 새 버전 문자열이 조금 더 위로 가도록 작은 보정
+  const version = text.match(/(?:gemini|llama|qwen|gemma|phi|gpt|mistral|deepseek)[^0-9]*(\d+(?:\.\d+)?)/)?.[1];
+  if (version) score += Number(version) || 0;
+  return score;
+}
+
+function sortModels(provider: AiProvider, models: CatalogModel[]): CatalogModel[] {
+  return [...models].sort((a, b) => {
+    const diff = modelRank(provider, b) - modelRank(provider, a);
+    if (diff !== 0) return diff;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 /**
  * 프로바이더별 모델 카탈로그를 OpenAI 호환 /models 엔드포인트에서 수집한다 (10분 캐시).
  * 무료 등급에서 쓸 수 없는 모델(임베딩/TTS/이미지, OpenRouter 유료 등)은 걸러낸다.
@@ -193,15 +258,15 @@ export class ModelCatalogService {
         .filter((m: CatalogModel) => m.id);
       const filtered = this.filterForProvider(provider, raw);
       const seen = new Set<string>();
-      const models: CatalogModel[] = [];
+      const unique: CatalogModel[] = [];
       const defaultEntry = filtered.find((m) => m.id === config.defaultModel)
         || { id: config.defaultModel, description: familyDescription(config.defaultModel) };
       for (const m of [defaultEntry, ...filtered]) {
         if (seen.has(m.id)) continue;
         seen.add(m.id);
-        models.push(m);
-        if (models.length >= MAX_MODELS_PER_PROVIDER) break;
+        unique.push(m);
       }
+      const models = sortModels(provider, unique).slice(0, MAX_MODELS_PER_PROVIDER);
       return { ...base, models };
     } catch (error) {
       this.logger.warn(`${provider} catalog fetch failed: ${error instanceof Error ? error.message : error}`);

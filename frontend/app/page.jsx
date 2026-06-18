@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { isNearBottom } from '../lib/scroll.mjs';
 
 const MODELS = [
   { value: 'auto', label: '🧠 자동 (AI 라우팅)' },
@@ -280,6 +281,9 @@ export default function Page() {
   const [compareA, setCompareA] = useState('auto');
   const [compareB, setCompareB] = useState('GROQ');
   const [compareRuns, setCompareRuns] = useState([]);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const messagesViewportRef = useRef(null);
+  const stickToBottomRef = useRef(true);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
 
@@ -302,8 +306,24 @@ export default function Page() {
     }
   }, [authed]);
 
+  function scrollToLatest(behavior = 'smooth') {
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
+  }
+
+  function handleMessagesScroll() {
+    const nearBottom = isNearBottom(messagesViewportRef.current);
+    stickToBottomRef.current = nearBottom;
+    setShowJumpToLatest(!nearBottom);
+  }
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (stickToBottomRef.current) {
+      scrollToLatest('smooth');
+    } else {
+      setShowJumpToLatest(true);
+    }
   }, [messages, compareRuns, busy]);
 
   async function refreshSessions() {
@@ -328,6 +348,8 @@ export default function Page() {
     if (d.session) {
       setSessionId(d.session.id);
       setMessages([]);
+      stickToBottomRef.current = true;
+      setShowJumpToLatest(false);
       setSidebarOpen(false);
       setCompareOn(false);
       refreshSessions();
@@ -336,6 +358,8 @@ export default function Page() {
 
   async function openChat(id) {
     setSessionId(id);
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
     setSidebarOpen(false);
     setCompareOn(false);
     const d = await fetch(`/api/sessions/${id}`).then((r) => r.json()).catch(() => ({ messages: [] }));
@@ -384,6 +408,8 @@ export default function Page() {
 
     const userContent = buildUserContent(text);
     const history = [...messages, { role: 'user', content: userContent }];
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
     setMessages(history);
     setInput('');
     const sentImage = image;
@@ -433,6 +459,8 @@ export default function Page() {
     setInput('');
     setBusy(true);
     setStatus('두 모델에 동시에 요청 중…');
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
     const run = { prompt: text, results: [{ label: compareA, text: '', meta: null }, { label: compareB, text: '', meta: null }] };
     const runs = [...compareRuns, run];
     setCompareRuns(runs);
@@ -557,7 +585,7 @@ export default function Page() {
         </div>
       )}
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: compareOn ? 1100 : 860, margin: '0 auto', padding: '0 16px', width: '100%', boxSizing: 'border-box' }}>
+      <main style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: compareOn ? 1100 : 860, margin: '0 auto', padding: '0 16px', width: '100%', boxSizing: 'border-box' }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #232838', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <button onClick={() => setSidebarOpen(true)} className="mobile-menu"
@@ -609,7 +637,11 @@ export default function Page() {
           )}
         </header>
 
-        <section style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}>
+        <section
+          ref={messagesViewportRef}
+          onScroll={handleMessagesScroll}
+          style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}
+        >
           {compareOn ? (
             <>
               {compareRuns.length === 0 && (
@@ -674,6 +706,30 @@ export default function Page() {
           {busy && <p style={{ color: '#8b93a7', fontSize: 13 }}>{status}</p>}
           <div ref={bottomRef} />
         </section>
+
+        {showJumpToLatest && (
+          <button
+            type="button"
+            onClick={() => scrollToLatest('smooth')}
+            style={{
+              position: 'absolute',
+              right: 22,
+              bottom: 82,
+              zIndex: 10,
+              border: '1px solid #33405a',
+              background: '#1f2534',
+              color: '#dbe4ff',
+              borderRadius: 999,
+              padding: '8px 12px',
+              fontSize: 13,
+              fontWeight: 700,
+              boxShadow: '0 8px 22px rgba(0,0,0,0.28)',
+              cursor: 'pointer',
+            }}
+          >
+            ↓ 최신 응답
+          </button>
+        )}
 
         <form onSubmit={send} style={{ padding: '10px 0 18px' }}>
           {image && !compareOn && (

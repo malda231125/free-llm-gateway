@@ -99,6 +99,7 @@ function modelRank(provider: AiProvider, model: CatalogModel): number {
   if (/vision|visual|\bvl\b|multimodal|pixtral|llava|maverick|scout/.test(text)) score += 16;
   if (/long|128k|200k|256k|1m|million|context/.test(text)) score += 12;
   if (/latest|preview|experimental|exp/.test(text)) score += 10;
+  if (/customtools|tool[-_ ]only/.test(text)) score -= 8;
 
   // 너무 작은/레거시/특수 목적 모델은 아래로
   if (/mini|small|lite|nano|8b|7b|3b|1b/.test(text)) score -= 12;
@@ -131,13 +132,19 @@ function modelRank(provider: AiProvider, model: CatalogModel): number {
     if (/deepseek|qwen3|llama-4|gemini|gpt-oss|kimi/.test(text)) score += 32;
   }
   if (provider === AiProvider.GITHUB) {
+    if (/gpt-5/.test(text)) score += 90;
     if (/gpt-4\.1|gpt-4o|o[134]|claude|mistral-large|llama-3\.3/.test(text)) score += 35;
     if (/gpt-4o-mini/.test(text)) score += 12;
+    if (/nano/.test(text)) score -= 16;
   }
 
-  // 같은 점수면 새 버전 문자열이 조금 더 위로 가도록 작은 보정
+  // 같은 점수면 새 버전 문자열이 조금 더 위로 가도록 작은 보정.
+  // 2501/2604 같은 날짜형 버전이 품질 점수를 압도하지 않도록 보너스를 제한한다.
   const version = text.match(/(?:gemini|llama|qwen|gemma|phi|gpt|mistral|deepseek)[^0-9]*(\d+(?:\.\d+)?)/)?.[1];
-  if (version) score += Number(version) || 0;
+  if (version) {
+    const n = Number(version) || 0;
+    score += n > 100 ? Math.min(8, Math.max(0, (n - 2400) / 50)) : Math.min(12, n);
+  }
   return score;
 }
 

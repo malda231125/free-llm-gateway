@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -284,6 +284,7 @@ export default function Page() {
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const messagesViewportRef = useRef(null);
   const stickToBottomRef = useRef(true);
+  const scrollSnapshotRef = useRef(null);
   const lastTouchYRef = useRef(null);
   const bottomRef = useRef(null);
   const fileRef = useRef(null);
@@ -315,6 +316,7 @@ export default function Page() {
 
   function pauseAutoScroll() {
     stickToBottomRef.current = false;
+    captureScrollSnapshot();
     setShowJumpToLatest(true);
   }
 
@@ -344,7 +346,28 @@ export default function Page() {
     const shouldFollow = isNearBottom(messagesViewportRef.current);
     stickToBottomRef.current = shouldFollow;
     setShowJumpToLatest(!shouldFollow);
+    if (!shouldFollow) captureScrollSnapshot();
   }
+
+  function captureScrollSnapshot() {
+    const viewport = messagesViewportRef.current;
+    if (!viewport || stickToBottomRef.current) return;
+    scrollSnapshotRef.current = { top: viewport.scrollTop };
+  }
+
+  useLayoutEffect(() => {
+    const snapshot = scrollSnapshotRef.current;
+    const viewport = messagesViewportRef.current;
+    if (!snapshot || !viewport || stickToBottomRef.current) return undefined;
+
+    viewport.scrollTop = snapshot.top;
+    const frame = requestAnimationFrame(() => {
+      if (!stickToBottomRef.current && messagesViewportRef.current) {
+        messagesViewportRef.current.scrollTop = snapshot.top;
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [messages, compareRuns, busy]);
 
   useEffect(() => {
     if (stickToBottomRef.current) {
@@ -451,17 +474,21 @@ export default function Page() {
 
     const apiMessages = history.map(({ role, content }) => ({ role, content }));
     try {
+      captureScrollSnapshot();
       setMessages([...history, { role: 'assistant', content: '', meta: null }]);
       const { text: answer, meta } = await streamChat(
         { messages: apiMessages, model: effectiveModel, sessionId: sid },
         (partial, m) => {
           setStatus('응답 생성 중…');
+          captureScrollSnapshot();
           setMessages([...history, { role: 'assistant', content: partial, meta: metaLabel(m) }]);
         },
       );
+      captureScrollSnapshot();
       setMessages([...history, { role: 'assistant', content: answer || '(빈 응답)', meta: metaLabel(meta) }]);
       refreshSessions();
     } catch (err) {
+      captureScrollSnapshot();
       setMessages([...history, { role: 'assistant', content: `⚠️ 오류: ${err.message}`, meta: null }]);
     } finally {
       setBusy(false);
@@ -492,6 +519,7 @@ export default function Page() {
     setCompareRuns(runs);
     const idx = runs.length - 1;
     const update = (side, partial, m) => {
+      captureScrollSnapshot();
       setCompareRuns((prev) => {
         const next = prev.map((r, i) => i === idx ? { ...r, results: r.results.map((res, j) => j === side ? { ...res, text: partial, meta: metaLabel(m) } : res) } : r);
         return next;
@@ -669,7 +697,7 @@ export default function Page() {
           onWheel={handleMessagesWheel}
           onTouchStart={handleMessagesTouchStart}
           onTouchMove={handleMessagesTouchMove}
-          style={{ flex: 1, overflowY: 'auto', padding: '18px 0' }}
+          style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none', padding: '18px 0' }}
         >
           {compareOn ? (
             <>

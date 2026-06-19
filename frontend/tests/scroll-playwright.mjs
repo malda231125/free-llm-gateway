@@ -37,6 +37,8 @@ try {
         const bottom = document.querySelector('#bottom');
         const jump = document.querySelector('#jump');
         let stickToBottom = true;
+        let scrollSnapshot = null;
+        let streamingMessage = null;
         let lastTouchY = null;
 
         function syncIntent() {
@@ -50,8 +52,27 @@ try {
           jump.hidden = true;
         }
 
+        function captureScrollSnapshot() {
+          if (stickToBottom) return;
+          scrollSnapshot = { top: messages.scrollTop };
+        }
+
+        function restoreScrollSnapshot() {
+          if (!scrollSnapshot || stickToBottom) return;
+          messages.scrollTop = scrollSnapshot.top;
+        }
+
+        function settleLayout() {
+          if (stickToBottom) scrollToLatest();
+          else {
+            restoreScrollSnapshot();
+            jump.hidden = false;
+          }
+        }
+
         function pauseAutoScroll() {
           stickToBottom = false;
+          captureScrollSnapshot();
           jump.hidden = false;
         }
 
@@ -75,14 +96,30 @@ try {
           p.style.margin = '0';
           p.style.minHeight = '32px';
           content.appendChild(p);
-          if (stickToBottom) scrollToLatest();
-          else jump.hidden = false;
+          settleLayout();
         }
 
         function sendOutgoing(text) {
           stickToBottom = isNearBottom(messages);
           jump.hidden = stickToBottom;
+          if (!stickToBottom) captureScrollSnapshot();
           appendChunk(text);
+        }
+
+        function startStreamingMessage(text) {
+          streamingMessage = document.createElement('p');
+          streamingMessage.textContent = text;
+          streamingMessage.style.margin = '0';
+          streamingMessage.style.lineHeight = '24px';
+          streamingMessage.style.whiteSpace = 'pre-wrap';
+          content.appendChild(streamingMessage);
+          settleLayout();
+        }
+
+        function growStreamingMessage(text) {
+          captureScrollSnapshot();
+          streamingMessage.textContent += text;
+          settleLayout();
         }
 
         messages.addEventListener('scroll', syncIntent);
@@ -90,7 +127,7 @@ try {
         messages.addEventListener('touchstart', onTouchStart);
         messages.addEventListener('touchmove', onTouchMove);
         jump.addEventListener('click', scrollToLatest);
-        window.testApi = { appendChunk, sendOutgoing, messages, jump };
+        window.testApi = { appendChunk, sendOutgoing, startStreamingMessage, growStreamingMessage, messages, jump };
       </script>
     `);
 
@@ -124,6 +161,22 @@ try {
     const outgoingJumpVisible = await page.evaluate(() => !window.testApi.jump.hidden);
     assert.equal(afterOutgoingScrollTop, beforeOutgoingScrollTop, `${viewport.name}: sending while reading should preserve scroll position`);
     assert.equal(outgoingJumpVisible, true, `${viewport.name}: latest button should remain available after sending while reading`);
+
+    await page.evaluate(() => {
+      window.testApi.messages.scrollTop = window.testApi.messages.scrollHeight;
+      window.testApi.messages.dispatchEvent(new Event('scroll'));
+      window.testApi.startStreamingMessage(Array.from({ length: 80 }, (_, i) => 'streaming line ' + i).join('\\n'));
+      window.testApi.messages.scrollTop = window.testApi.messages.scrollHeight - 520;
+      window.testApi.messages.dispatchEvent(new Event('scroll'));
+    });
+    const beforeGrowingBubbleScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    await page.evaluate(() => {
+      for (let i = 0; i < 30; i += 1) {
+        window.testApi.growStreamingMessage('\\nmore generated text ' + i);
+      }
+    });
+    const afterGrowingBubbleScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    assert.equal(afterGrowingBubbleScrollTop, beforeGrowingBubbleScrollTop, `${viewport.name}: growing streaming message should not move the reader`);
 
     await page.evaluate(() => {
       window.testApi.messages.scrollTop = window.testApi.messages.scrollHeight;

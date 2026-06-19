@@ -79,12 +79,18 @@ try {
           else jump.hidden = false;
         }
 
+        function sendOutgoing(text) {
+          stickToBottom = isNearBottom(messages);
+          jump.hidden = stickToBottom;
+          appendChunk(text);
+        }
+
         messages.addEventListener('scroll', syncIntent);
         messages.addEventListener('wheel', onWheel);
         messages.addEventListener('touchstart', onTouchStart);
         messages.addEventListener('touchmove', onTouchMove);
         jump.addEventListener('click', scrollToLatest);
-        window.testApi = { appendChunk, messages, jump };
+        window.testApi = { appendChunk, sendOutgoing, messages, jump };
       </script>
     `);
 
@@ -107,6 +113,17 @@ try {
 
     assert.equal(afterStreamScrollTop, readingScrollTop, `${viewport.name}: stream should not force scroll while reading`);
     assert.equal(jumpVisible, true, `${viewport.name}: latest button should appear while reading`);
+
+    await page.evaluate(() => {
+      window.testApi.messages.scrollTop = 160;
+      window.testApi.messages.dispatchEvent(new Event('scroll'));
+    });
+    const beforeOutgoingScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    await page.evaluate(() => window.testApi.sendOutgoing('outgoing while reading'));
+    const afterOutgoingScrollTop = await page.evaluate(() => window.testApi.messages.scrollTop);
+    const outgoingJumpVisible = await page.evaluate(() => !window.testApi.jump.hidden);
+    assert.equal(afterOutgoingScrollTop, beforeOutgoingScrollTop, `${viewport.name}: sending while reading should preserve scroll position`);
+    assert.equal(outgoingJumpVisible, true, `${viewport.name}: latest button should remain available after sending while reading`);
 
     await page.evaluate(() => {
       window.testApi.messages.scrollTop = window.testApi.messages.scrollHeight;

@@ -340,6 +340,12 @@ export default function Page() {
     lastTouchYRef.current = nextY;
   }
 
+  function preserveCurrentScrollIntent() {
+    const shouldFollow = isNearBottom(messagesViewportRef.current);
+    stickToBottomRef.current = shouldFollow;
+    setShowJumpToLatest(!shouldFollow);
+  }
+
   useEffect(() => {
     if (stickToBottomRef.current) {
       scrollToLatest('auto');
@@ -430,8 +436,7 @@ export default function Page() {
 
     const userContent = buildUserContent(text);
     const history = [...messages, { role: 'user', content: userContent }];
-    stickToBottomRef.current = true;
-    setShowJumpToLatest(false);
+    preserveCurrentScrollIntent();
     setMessages(history);
     setInput('');
     const sentImage = image;
@@ -481,8 +486,7 @@ export default function Page() {
     setInput('');
     setBusy(true);
     setStatus('두 모델에 동시에 요청 중…');
-    stickToBottomRef.current = true;
-    setShowJumpToLatest(false);
+    preserveCurrentScrollIntent();
     const run = { prompt: text, results: [{ label: compareA, text: '', meta: null }, { label: compareB, text: '', meta: null }] };
     const runs = [...compareRuns, run];
     setCompareRuns(runs);

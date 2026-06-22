@@ -85,8 +85,8 @@ Swagger UI: `http://localhost:3000/docs`
 See `.env.example` for environment variables. **You only need keys for the providers you actually use.**
 Calling a provider without a key returns 503 with a signup URL.
 
-> No dotenv is bundled — load `.env` in your shell (`export $(cat .env | xargs)`)
-> or use your deployment platform's environment settings (Render, Cloud Run, etc.).
+Local runs load `.env` automatically. Deployment environment variables still take precedence
+when set by your platform (Render, Cloud Run, etc.).
 
 ### Docker
 

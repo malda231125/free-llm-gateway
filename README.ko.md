@@ -85,8 +85,8 @@ Swagger 문서: `http://localhost:3000/docs`
 환경변수는 `.env.example` 참고. **사용할 프로바이더의 키만 설정하면 됩니다.**
 키가 없는 프로바이더를 호출하면 503과 함께 발급 안내 URL을 돌려줍니다.
 
-> dotenv를 따로 안 쓰므로 `.env`는 셸에서 로드하거나(`export $(cat .env | xargs)`),
-> 배포 플랫폼(Render, Cloud Run 등)의 환경변수 설정을 사용하세요.
+로컬 실행 시 `.env`를 자동으로 로드합니다. 배포 플랫폼(Render, Cloud Run 등)에서
+설정한 환경변수는 그대로 우선 적용됩니다.
 
 ### Docker
 

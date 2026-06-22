@@ -15,18 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --include=dev
-      - run: npm run build
-      - name: Boot smoke test
-        run: |
-          PORT=3100 node dist/main.js &
-          SERVER_PID=$!
-          for i in $(seq 1 20); do
-            curl -sf http://localhost:3100/health && break
-            sleep 1
-          done
-          curl -sf http://localhost:3100/health
-          curl -sf http://localhost:3100/v1/providers > /dev/null
-          kill $SERVER_PID
+      - run: npm test
 
   docker:
     runs-on: ubuntu-latest

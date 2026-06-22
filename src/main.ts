@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -30,8 +31,10 @@ async function bootstrap() {
     .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'apiKey')
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
-
-  await app.listen(Number(process.env.PORT || 3000));
+  const port = process.env.PORT || 3000;
+  console.log('free llm api :', port);
+  await app.listen(Number(port));
+  
 }
 
 void bootstrap();

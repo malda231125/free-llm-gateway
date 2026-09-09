@@ -40,10 +40,10 @@ export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
   [AiProvider.GROQ]: {
     baseUrl: 'https://api.groq.com/openai/v1',
     apiKeyEnv: 'GROQ_API_KEY',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'openai/gpt-oss-120b',
     limits: { rpm: 30, rpd: 1000, tpd: 100_000 },
     signupUrl: 'https://console.groq.com/keys',
-    description: 'Llama 3.3 70B를 초고속(200ms급) 서빙. 짧은 답변·실시간성이 중요한 작업·간단한 질문에 최적. 한국어 보통.',
+    description: 'GPT-OSS 120B/20B 초고속 서빙. 짧은 답변·실시간성·간단한 분류/추출에 최적.',
   },
   [AiProvider.CEREBRAS]: {
     baseUrl: 'https://api.cerebras.ai/v1',

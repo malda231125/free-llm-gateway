@@ -8,6 +8,7 @@ import { RateLimiterService } from './rate-limiter.service';
 import { UsageStoreService } from './usage-store.service';
 
 const FALLBACK_ORDER: AiProvider[] = [
+  AiProvider.OLLAMA,
   AiProvider.GOOGLE,
   AiProvider.GROQ,
   AiProvider.CEREBRAS,
@@ -175,7 +176,7 @@ export class ChatCompletionsService {
         authorization: `Bearer ${apiKey}`,
         ...config.extraHeaders,
       },
-      body: JSON.stringify({ ...passthrough, model: target.model }),
+      body: JSON.stringify({ ...config.defaultParams, ...passthrough, model: target.model }),
     });
   }
 

@@ -8,6 +8,7 @@ import { UsageStoreService } from './usage-store.service';
 
 /** AI 라우터를 못 쓸 때 사용하는 정적 우선순위 (품질·한도·가용성 종합) */
 const FALLBACK_ORDER: AiProvider[] = [
+  AiProvider.OLLAMA,
   AiProvider.GOOGLE,
   AiProvider.GROQ,
   AiProvider.CEREBRAS,
@@ -113,6 +114,7 @@ export class GenerateService {
         ...config.extraHeaders,
       },
       body: JSON.stringify({
+        ...config.defaultParams,
         model,
         messages: [{ role: 'user', content: prompt }],
       }),

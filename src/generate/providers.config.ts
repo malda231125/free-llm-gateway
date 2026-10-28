@@ -1,4 +1,5 @@
 export enum AiProvider {
+  OLLAMA = 'OLLAMA',
   GOOGLE = 'GOOGLE',
   GROQ = 'GROQ',
   CEREBRAS = 'CEREBRAS',
@@ -23,11 +24,28 @@ export interface ProviderConfig {
   description: string;
   /** 요청에 추가로 필요한 헤더 */
   extraHeaders?: Record<string, string>;
+  /** 요청에 값이 없을 때 채워 넣을 기본 body 파라미터 (요청이 명시한 값이 우선) */
+  defaultParams?: Record<string, unknown>;
   /** 무료 임베딩 지원 시 기본 임베딩 모델 */
   embeddingModel?: string;
 }
 
 export const PROVIDERS: Record<AiProvider, ProviderConfig> = {
+  [AiProvider.OLLAMA]: {
+    // 사내망 로컬 Ollama (OpenAI 호환 /v1). 호스트/모델은 OLLAMA_BASE_URL, OLLAMA_MODEL로 변경 가능.
+    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1',
+    // Ollama는 키를 검사하지 않지만 게이트웨이 키 풀 로직상 값이 필요하다 (아무 문자열).
+    apiKeyEnv: 'OLLAMA_API_KEY',
+    defaultModel: process.env.OLLAMA_MODEL || 'gemma4:31b-mlx',
+    limits: { rpm: 600, rpd: 1_000_000 },
+    // 기본은 Ollama 기본 동작(thinking ON, 검증 안정성 우선)을 그대로 둔다.
+    // 서버 기본값을 바꾸려면 OLLAMA_REASONING_EFFORT=none|low|medium|high, 요청별은 body의 reasoning_effort(우선).
+    defaultParams: process.env.OLLAMA_REASONING_EFFORT
+      ? { reasoning_effort: process.env.OLLAMA_REASONING_EFFORT }
+      : undefined,
+    signupUrl: 'https://ollama.com',
+    description: '사내 로컬 Ollama의 Gemma 4 31B. 외부 전송 없음(데이터 유출 없음), 한도 없음, 한국어/코드/추론 범용. 민감한 데이터는 항상 이쪽.',
+  },
   [AiProvider.GOOGLE]: {
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     apiKeyEnv: 'GOOGLE_AI_API_KEY',
